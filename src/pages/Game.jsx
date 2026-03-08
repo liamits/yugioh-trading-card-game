@@ -15,7 +15,7 @@ function Game() {
         <p className="game-subtitle">Coming Soon...</p>
         
         <div className="game-features">
-          <div className="feature-card" onClick={() => navigate('/character-select')}>
+          <div className="feature-card" onClick={() => navigate('/duel-loading')}>
             <div className="feature-icon">🎮</div>
             <h3>Play vs AI</h3>
             <p>Challenge the computer in epic duels</p>

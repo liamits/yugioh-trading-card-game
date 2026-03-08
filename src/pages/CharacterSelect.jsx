@@ -9,9 +9,16 @@ function CharacterSelect() {
   const [aiCharacter, setAiCharacter] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectingFor, setSelectingFor] = useState('player') // 'player' or 'ai'
+  const [showDuelLoading, setShowDuelLoading] = useState(true)
 
   useEffect(() => {
-    fetchCharacters()
+    // Show duel loading for 2 seconds when entering this page
+    const timer = setTimeout(() => {
+      setShowDuelLoading(false)
+      fetchCharacters()
+    }, 2000)
+
+    return () => clearTimeout(timer)
   }, [])
 
   const fetchCharacters = async () => {
@@ -52,10 +59,16 @@ function CharacterSelect() {
     setSelectingFor('player')
   }
 
-  if (loading) {
+  if (showDuelLoading || loading) {
     return (
-      <div className="loading">
-        <h2>Loading Characters...</h2>
+      <div className="duel-loading-screen">
+        <div className="duel-loading-background" />
+        <div className="duel-loading-content">
+          <div className="duel-loading-title">
+            <h1>⚔️ DUEL MODE ⚔️</h1>
+          </div>
+          <div className="duel-loading-text">Loading duelists...</div>
+        </div>
       </div>
     )
   }
@@ -75,10 +88,6 @@ function CharacterSelect() {
               <div className="fighter-info">
                 <h2>{playerCharacter.name}</h2>
                 <p>{playerCharacter.description}</p>
-                <div className="stats">
-                  <span>⭐ Wins: {playerCharacter.stats.wins}</span>
-                  <span>🎴 Deck: {playerCharacter.deck.main.length}</span>
-                </div>
               </div>
             </>
           ) : (
@@ -91,11 +100,6 @@ function CharacterSelect() {
 
         <div className="vs-section">
           <div className="vs-text">VS</div>
-          {selectingFor === 'ai' && (
-            <div className="selection-hint">
-              <p>Now select AI opponent</p>
-            </div>
-          )}
           {playerCharacter && aiCharacter && (
             <>
               <button className="start-duel-btn" onClick={startDuel}>
@@ -115,10 +119,6 @@ function CharacterSelect() {
               <div className="fighter-info">
                 <h2>{aiCharacter.name}</h2>
                 <p>{aiCharacter.description}</p>
-                <div className="stats">
-                  <span>⭐ Wins: {aiCharacter.stats.wins}</span>
-                  <span>🎴 Deck: {aiCharacter.deck.main.length}</span>
-                </div>
               </div>
             </>
           ) : (

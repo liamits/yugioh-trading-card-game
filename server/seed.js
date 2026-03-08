@@ -39,6 +39,36 @@ const yugiDeck = {
   extra: []
 }
 
+const yamiYugiDeck = {
+  main: [
+    {
+      id: 46986414,
+      name: "Dark Magician",
+      type: "Normal Monster",
+      desc: "The ultimate wizard in terms of attack and defense.",
+      atk: 2500,
+      def: 2100,
+      level: 7,
+      race: "Spellcaster",
+      attribute: "DARK",
+      image_url: "https://images.ygoprodeck.com/images/cards/46986414.jpg"
+    },
+    {
+      id: 10000010,
+      name: "Slifer the Sky Dragon",
+      type: "Effect Monster",
+      desc: "Cannot be Special Summoned.",
+      atk: 0,
+      def: 0,
+      level: 10,
+      race: "Divine-Beast",
+      attribute: "DIVINE",
+      image_url: "https://images.ygoprodeck.com/images/cards/10000010.jpg"
+    }
+  ],
+  extra: []
+}
+
 const kaibaDeck = {
   main: [
     {
@@ -173,45 +203,51 @@ const characters = [
     deck: yugiDeck
   },
   {
+    name: "Yami Yugi",
+    description: "The Pharaoh's spirit, wielder of the Egyptian God Cards",
+    avatar: "/image/yamiyugi_pfp.webp",
+    deck: yamiYugiDeck
+  },
+  {
     name: "Kaiba",
     description: "CEO of Kaiba Corp, master of the Blue-Eyes White Dragon",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/setokaiba_pfp.webp",
     deck: kaibaDeck
   },
   {
     name: "Joey",
     description: "The underdog duelist with a heart of gold and Red-Eyes Black Dragon",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/joey_pfp.webp",
     deck: joeyDeck
   },
   {
     name: "Mai",
     description: "The elegant duelist who commands the Harpie Ladies",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/mai_pfp.webp",
     deck: maiDeck
   },
   {
     name: "Pegasus",
     description: "Creator of Duel Monsters and master of Toon cards",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/pegasus_pfp.webp",
     deck: pegasusDeck
   },
   {
     name: "Yami Bakura",
     description: "The dark spirit wielding occult and fiend monsters",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/bakura_pfp.webp",
     deck: bakuraDeck
   },
   {
     name: "Yami Marik",
     description: "The evil alter ego commanding the Egyptian God Card Ra",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/marik_pfp.webp",
     deck: marikDeck
   },
   {
     name: "Ishizu",
     description: "Guardian of the Millennium Necklace with mystical powers",
-    avatar: "/image/yugimuto_pfp.webp",
+    avatar: "/image/ishuzu_pfp.webp",
     deck: ishizuDeck
   }
 ]
