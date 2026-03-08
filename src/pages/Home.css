@@ -1,0 +1,42 @@
+@import '../App.css';
+
+.play-now-btn {
+  margin-top: 25px;
+  padding: 16px 48px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: 2px solid transparent;
+  border-radius: 50px;
+  background: linear-gradient(135deg, #8ab4f8 0%, #c58af9 50%, #ff77c6 100%);
+  color: #0a0e27;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(138, 180, 248, 0.4);
+}
+
+.play-now-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: left 0.5s;
+}
+
+.play-now-btn:hover::before {
+  left: 100%;
+}
+
+.play-now-btn:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 15px 40px rgba(138, 180, 248, 0.6);
+}
+
+.play-now-btn:active {
+  transform: translateY(-1px) scale(1.02);
+}
