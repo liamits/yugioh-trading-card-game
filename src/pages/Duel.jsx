@@ -38,6 +38,15 @@ function Duel() {
   const [showGraveyard, setShowGraveyard] = useState(false)
   const [graveyardOwner, setGraveyardOwner] = useState(null)
   const [damageAnimation, setDamageAnimation] = useState({ player: null, ai: null })
+  const [gameOver, setGameOver] = useState(false)
+  const [winner, setWinner] = useState(null)
+  const [contextMenu, setContextMenu] = useState(null)
+  const [tributeMode, setTributeMode] = useState(false)
+  const [selectedTributes, setSelectedTributes] = useState([])
+  const [tributeCard, setTributeCard] = useState(null)
+  const [selectedHandCard, setSelectedHandCard] = useState(null)
+  const [summonMode, setSummonMode] = useState(null) // 'normal', 'tribute', 'set'
+  const [selectingZone, setSelectingZone] = useState(false)
 
   useEffect(() => {
     if (!player || !ai) {
@@ -45,6 +54,17 @@ function Duel() {
       return
     }
   }, [])
+
+  useEffect(() => {
+    // Check win/lose condition
+    if (playerLP <= 0) {
+      setGameOver(true)
+      setWinner('ai')
+    } else if (aiLP <= 0) {
+      setGameOver(true)
+      setWinner('player')
+    }
+  }, [playerLP, aiLP])
 
   const handleCoinChoice = (choice) => {
     setPlayerChoice(choice)
@@ -122,8 +142,123 @@ function Duel() {
     setShowExtraDeck(false)
   }
 
+  const handleHandCardClick = (card, index) => {
+    // Close context menu
+    setContextMenu(null)
+
+    // If already selected, show summon options
+    if (selectedHandCard?.index === index) {
+      setSelectedHandCard(null)
+      return
+    }
+
+    // Select card and show summon options
+    setSelectedHandCard({ card, index })
+  }
+
+  const handleSummonOption = (option) => {
+    if (!selectedHandCard) return
+
+    const card = selectedHandCard.card
+    const level = card.level || 0
+
+    // Calculate tributes needed
+    let tributesNeeded = 0
+    if (level >= 10) {
+      tributesNeeded = 3
+    } else if (level >= 7) {
+      tributesNeeded = 2
+    } else if (level >= 5) {
+      tributesNeeded = 1
+    }
+
+    if (option === 'normal') {
+      // Normal Summon (no tribute) - only for level 1-4
+      if (level >= 5) {
+        alert('Monster level 5+ cần tribute summon!')
+        return
+      }
+      setSummonMode('normal')
+      setSelectingZone(true)
+    } else if (option === 'tribute') {
+      // Tribute Summon - only face-up for level 5+
+      if (tributesNeeded === 0) {
+        alert('Monster này không cần tribute!')
+        return
+      }
+
+      const field = currentTurn === 'player' ? playerField : aiField
+      const availableMonsters = field.monsters.filter(m => m !== null)
+
+      if (availableMonsters.length < tributesNeeded) {
+        alert(`Cần ${tributesNeeded} monster để tribute summon! (Hiện có ${availableMonsters.length})`)
+        return
+      }
+
+      // Enter tribute selection mode (always face-up for tribute summon)
+      setTributeMode(true)
+      setTributeCard({ card, tributesNeeded, faceUp: true, availableMonsters })
+      setSelectedTributes([])
+    } else if (option === 'set') {
+      // Set (face-down) - only for level 1-4 monsters or spell/trap
+      if (card.type.includes('Monster') && level >= 5) {
+        alert('Monster level 5+ không thể úp! Chỉ có thể Tribute Summon.')
+        return
+      }
+      setSummonMode('set')
+      setSelectingZone(true)
+    }
+  }
+
+  const handleZoneSelect = (zoneIndex, type) => {
+    if (!selectingZone || !selectedHandCard) return
+
+    const field = currentTurn === 'player' ? playerField : aiField
+    const setField = currentTurn === 'player' ? setPlayerField : setAiField
+    const hand = currentTurn === 'player' ? playerHand : aiHand
+    const setHand = currentTurn === 'player' ? setPlayerHand : setAiHand
+
+    // Check if zone is empty
+    if (type === 'monster' && field.monsters[zoneIndex]) {
+      alert('Zone này đã có bài!')
+      return
+    }
+    if (type === 'spell' && field.spells[zoneIndex]) {
+      alert('Zone này đã có bài!')
+      return
+    }
+
+    // Place card
+    if (type === 'monster') {
+      const newMonsters = [...field.monsters]
+      newMonsters[zoneIndex] = {
+        ...selectedHandCard.card,
+        faceUp: summonMode === 'normal',
+        position: summonMode === 'normal' ? 'attack' : 'defense'
+      }
+      setField({ ...field, monsters: newMonsters })
+    } else {
+      const newSpells = [...field.spells]
+      newSpells[zoneIndex] = {
+        ...selectedHandCard.card,
+        faceUp: summonMode === 'activate'
+      }
+      setField({ ...field, spells: newSpells })
+    }
+
+    // Remove from hand
+    const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
+    setHand(newHand)
+
+    // Reset states
+    setSelectedHandCard(null)
+    setSummonMode(null)
+    setSelectingZone(false)
+  }
+
   const handleDragStart = (card, index) => {
-    setDraggedCard({ card, handIndex: index })
+    // Disabled - using click system now
+    return
   }
 
   const handleDragOver = (e) => {
@@ -131,61 +266,13 @@ function Duel() {
   }
 
   const handleDropOnMonsterZone = (zoneIndex, isCurrentPlayer) => {
-    if (!draggedCard) return
-    
-    const card = draggedCard.card
-    
-    // Check if it's a monster card
-    if (!card.type.includes('Monster')) {
-      alert('Chỉ có thể đặt Monster vào Monster Zone!')
-      setDraggedCard(null)
-      return
-    }
-
-    // Get the correct field
-    const field = isCurrentPlayer ? 
-      (currentTurn === 'player' ? playerField : aiField) : 
-      (currentTurn === 'player' ? aiField : playerField)
-
-    // Check if zone is empty
-    if (field.monsters[zoneIndex]) {
-      alert('Zone này đã có bài!')
-      setDraggedCard(null)
-      return
-    }
-
-    // Show options: Set (face-down) or Summon (face-up)
-    setSelectedZone({ type: 'monster', index: zoneIndex, isCurrentPlayer })
-    setShowCardOptions(true)
+    // Disabled - using click system now
+    return
   }
 
   const handleDropOnSpellZone = (zoneIndex, isCurrentPlayer) => {
-    if (!draggedCard) return
-    
-    const card = draggedCard.card
-    
-    // Check if it's a spell/trap card
-    if (!card.type.includes('Spell') && !card.type.includes('Trap')) {
-      alert('Chỉ có thể đặt Spell/Trap vào Spell/Trap Zone!')
-      setDraggedCard(null)
-      return
-    }
-
-    // Get the correct field
-    const field = isCurrentPlayer ? 
-      (currentTurn === 'player' ? playerField : aiField) : 
-      (currentTurn === 'player' ? aiField : playerField)
-
-    // Check if zone is empty
-    if (field.spells[zoneIndex]) {
-      alert('Zone này đã có bài!')
-      setDraggedCard(null)
-      return
-    }
-
-    // Show options: Set (face-down) or Activate (face-up)
-    setSelectedZone({ type: 'spell', index: zoneIndex, isCurrentPlayer })
-    setShowCardOptions(true)
+    // Disabled - using click system now
+    return
   }
 
   const handleCardPlacement = (faceUp) => {
@@ -230,6 +317,9 @@ function Duel() {
   }
 
   const handleCardClick = (card, type, index, isCurrentPlayer) => {
+    // Close context menu if open
+    setContextMenu(null)
+
     // If in battle phase and clicking own monster
     if (battlePhase && isCurrentPlayer && type === 'monster' && card.faceUp && card.position === 'attack') {
       setSelectedAttacker({ card, index })
@@ -254,6 +344,180 @@ function Duel() {
       }
       setField({ ...field, monsters: newMonsters })
     }
+  }
+
+  const handleRightClick = (e, card, type, index, isCurrentPlayer) => {
+    e.preventDefault()
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      card,
+      type,
+      index,
+      isCurrentPlayer
+    })
+  }
+
+  const handleSendToGY = () => {
+    if (!contextMenu) return
+
+    const { card, type, index, isCurrentPlayer } = contextMenu
+    const field = isCurrentPlayer ? 
+      (currentTurn === 'player' ? playerField : aiField) : 
+      (currentTurn === 'player' ? aiField : playerField)
+    const setField = isCurrentPlayer ? 
+      (currentTurn === 'player' ? setPlayerField : setAiField) : 
+      (currentTurn === 'player' ? setAiField : setPlayerField)
+    const graveyard = isCurrentPlayer ?
+      (currentTurn === 'player' ? playerGraveyard : aiGraveyard) :
+      (currentTurn === 'player' ? aiGraveyard : playerGraveyard)
+    const setGraveyard = isCurrentPlayer ?
+      (currentTurn === 'player' ? setPlayerGraveyard : setAiGraveyard) :
+      (currentTurn === 'player' ? setAiGraveyard : setPlayerGraveyard)
+
+    // Add to graveyard
+    setGraveyard([...graveyard, card])
+
+    // Remove from field
+    if (type === 'monster') {
+      const newMonsters = [...field.monsters]
+      newMonsters[index] = null
+      setField({ ...field, monsters: newMonsters })
+    } else {
+      const newSpells = [...field.spells]
+      newSpells[index] = null
+      setField({ ...field, spells: newSpells })
+    }
+
+    setContextMenu(null)
+  }
+
+  const handleTributeSelect = (monster) => {
+    if (!tributeCard) return
+
+    const isAlreadySelected = selectedTributes.some(m => m.id === monster.id)
+    
+    if (isAlreadySelected) {
+      // Deselect
+      setSelectedTributes(selectedTributes.filter(m => m.id !== monster.id))
+    } else {
+      // Select
+      if (selectedTributes.length < tributeCard.tributesNeeded) {
+        setSelectedTributes([...selectedTributes, monster])
+      }
+    }
+  }
+
+  const handleConfirmTribute = (faceUp) => {
+    if (!tributeCard || selectedTributes.length !== tributeCard.tributesNeeded) {
+      alert(`Vui lòng chọn ${tributeCard.tributesNeeded} monster để tribute!`)
+      return
+    }
+
+    if (!selectedHandCard) return
+
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const graveyard = isPlayerTurn ? playerGraveyard : aiGraveyard
+    const setGraveyard = isPlayerTurn ? setPlayerGraveyard : setAiGraveyard
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+
+    // Close tribute modal first
+    setTributeMode(false)
+
+    // Show tribute animation with video
+    const tributeAnimation = document.createElement('div')
+    tributeAnimation.className = 'tribute-summon-animation'
+    tributeAnimation.innerHTML = `
+      <video class="tribute-video" autoplay muted playsinline>
+        <source src="/sounds/tribute-summon.mp4" type="video/mp4">
+      </video>
+      <div class="tribute-overlay">
+        <div class="tribute-flash"></div>
+        <div class="tribute-particles">
+          ${Array(20).fill(0).map((_, i) => `<div class="particle" style="--angle: ${i * 18}deg"></div>`).join('')}
+        </div>
+        <div class="tribute-text">
+          <h2>🔥 TRIBUTE SUMMON! 🔥</h2>
+          <p>${tributeCard.card.name}</p>
+        </div>
+      </div>
+    `
+    document.body.appendChild(tributeAnimation)
+
+    // Add screen shake
+    document.querySelector('.duel-field').classList.add('screen-shake')
+
+    // Get video element and handle its end
+    const video = tributeAnimation.querySelector('.tribute-video')
+    const animationDuration = 2000 // 2 seconds for video + effects
+
+    // Wait for animation
+    setTimeout(() => {
+      // Send tributed monsters to GY
+      setGraveyard([...graveyard, ...selectedTributes.map(m => m.card)])
+
+      // Remove tributed monsters from field
+      const newMonsters = [...field.monsters]
+      selectedTributes.forEach(monster => {
+        const index = newMonsters.findIndex(m => m && m.id === monster.card.id)
+        if (index !== -1) {
+          newMonsters[index] = null
+        }
+      })
+
+      // Find first empty zone to place new monster
+      const emptyZoneIndex = newMonsters.findIndex(m => m === null)
+      if (emptyZoneIndex === -1) {
+        alert('Không có zone trống!')
+        tributeAnimation.remove()
+        document.querySelector('.duel-field').classList.remove('screen-shake')
+        return
+      }
+
+      // Place new monster (use faceUp from tributeCard if set during tribute selection)
+      const shouldBeFaceUp = tributeCard.faceUp !== undefined ? tributeCard.faceUp : faceUp
+      newMonsters[emptyZoneIndex] = {
+        ...tributeCard.card,
+        faceUp: shouldBeFaceUp,
+        position: shouldBeFaceUp ? 'attack' : 'defense',
+        justSummoned: true
+      }
+
+      setField({ ...field, monsters: newMonsters })
+
+      // Remove from hand
+      const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
+      setHand(newHand)
+
+      // Remove animation and shake
+      setTimeout(() => {
+        tributeAnimation.remove()
+        document.querySelector('.duel-field').classList.remove('screen-shake')
+        
+        // Remove justSummoned flag after animation
+        setTimeout(() => {
+          const finalMonsters = [...newMonsters]
+          if (finalMonsters[emptyZoneIndex]) {
+            delete finalMonsters[emptyZoneIndex].justSummoned
+            setField({ ...field, monsters: finalMonsters })
+          }
+        }, 1000)
+      }, 500)
+
+      // Reset states
+      setSelectedTributes([])
+      setTributeCard(null)
+      setSelectedHandCard(null)
+    }, animationDuration)
+  }
+
+  const handleCancelTribute = () => {
+    setTributeMode(false)
+    setSelectedTributes([])
+    setTributeCard(null)
   }
 
   const handleBattle = (attacker, defender) => {
@@ -433,6 +697,30 @@ function Duel() {
     setGraveyardOwner(null)
   }
 
+  const handleDrawCard = () => {
+    const isPlayerTurn = currentTurn === 'player'
+    const deck = isPlayerTurn ? playerDeck : aiDeck
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+
+    if (deck.length === 0) {
+      // Deck out - lose the game
+      setGameOver(true)
+      setWinner(isPlayerTurn ? 'ai' : 'player')
+      alert(`${isPlayerTurn ? player.name : ai.name} không còn bài để rút! Deck Out!`)
+      return
+    }
+
+    // Draw card
+    const drawnCard = deck[0]
+    setHand([...hand, drawnCard])
+    setDeck(deck.slice(1))
+    
+    // Show notification
+    alert(`Rút bài: ${drawnCard.name}`)
+  }
+
   const animateLP = (target, damage) => {
     // Show damage animation
     if (target === 'player') {
@@ -471,6 +759,72 @@ function Duel() {
 
   return (
     <div className="duel-field">
+      {/* Game Over Modal */}
+      {gameOver && (
+        <div className="game-over-modal">
+          <div className="game-over-content">
+            <div className="game-over-header">
+              {winner === 'player' ? (
+                <>
+                  <h1 className="victory-text">🎉 VICTORY! 🎉</h1>
+                  <div className="winner-info">
+                    <img src={player.avatar} alt={player.name} className="winner-avatar" />
+                    <h2>{player.name} Wins!</h2>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h1 className="defeat-text">💔 DEFEAT 💔</h1>
+                  <div className="winner-info">
+                    <img src={ai.avatar} alt={ai.name} className="winner-avatar" />
+                    <h2>{ai.name} Wins!</h2>
+                  </div>
+                </>
+              )}
+            </div>
+            
+            <div className="final-scores">
+              <div className="score-item">
+                <img src={player.avatar} alt={player.name} className="score-avatar" />
+                <div className="score-details">
+                  <span className="score-name">{player.name}</span>
+                  <span className="score-lp">LP: {playerLP}</span>
+                </div>
+              </div>
+              <div className="vs-divider">VS</div>
+              <div className="score-item">
+                <img src={ai.avatar} alt={ai.name} className="score-avatar" />
+                <div className="score-details">
+                  <span className="score-name">{ai.name}</span>
+                  <span className="score-lp">LP: {aiLP}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="game-over-buttons">
+              <button 
+                className="game-over-btn rematch"
+                onClick={() => window.location.reload()}
+              >
+                🔄 Rematch
+              </button>
+              <button 
+                className="game-over-btn menu"
+                onClick={() => navigate('/character-select')}
+              >
+                🏠 Character Select
+              </button>
+              <button 
+                className="game-over-btn home"
+                onClick={() => navigate('/')}
+              >
+                🏡 Home
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Coin Toss Modal */}
       {showCoinToss && (
         <div className="coin-toss-modal">
@@ -580,6 +934,9 @@ function Duel() {
           <div className="zone deck-zone">
             <div className="card-back"></div>
             <div className="zone-label">Deck</div>
+            {(currentTurn === 'player' ? aiDeck : playerDeck).length > 0 && (
+              <div className="deck-count">{(currentTurn === 'player' ? aiDeck : playerDeck).length}</div>
+            )}
           </div>
           <div className="zone graveyard-zone" onClick={() => handleGraveyardClick('ai')}>
             <div className="card-placeholder">GY</div>
@@ -645,17 +1002,22 @@ function Duel() {
             {(currentTurn === 'player' ? playerField : aiField).monsters.map((card, i) => (
               <div 
                 key={i} 
-                className={`zone monster-zone ${selectedAttacker?.index === i ? 'selected-attacker' : ''}`}
-                onDragOver={handleDragOver}
-                onDrop={() => handleDropOnMonsterZone(i, true)}
-                onClick={() => card && handleCardClick(card, 'monster', i, true)}
+                className={`zone monster-zone ${selectedAttacker?.index === i ? 'selected-attacker' : ''} ${selectingZone && selectedHandCard?.card.type.includes('Monster') ? 'zone-selectable' : ''}`}
+                onClick={() => {
+                  if (selectingZone && !card && selectedHandCard?.card.type.includes('Monster')) {
+                    handleZoneSelect(i, 'monster')
+                  } else if (card) {
+                    handleCardClick(card, 'monster', i, true)
+                  }
+                }}
+                onContextMenu={(e) => !selectingZone && card && handleRightClick(e, card, 'monster', i, true)}
               >
                 {card ? (
                   card.faceUp ? (
                     <img 
                       src={card.image_url} 
                       alt={card.name}
-                      className={`field-card ${card.position}`}
+                      className={`field-card ${card.position} ${card.justSummoned ? 'just-summoned' : ''}`}
                     />
                   ) : (
                     <div className="card-back"></div>
@@ -672,9 +1034,13 @@ function Duel() {
             {(currentTurn === 'player' ? playerField : aiField).spells.map((card, i) => (
               <div 
                 key={i} 
-                className="zone spell-trap-zone"
-                onDragOver={handleDragOver}
-                onDrop={() => handleDropOnSpellZone(i, true)}
+                className={`zone spell-trap-zone ${selectingZone && selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap') ? 'zone-selectable' : ''}`}
+                onClick={() => {
+                  if (selectingZone && !card && (selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap'))) {
+                    handleZoneSelect(i, 'spell')
+                  }
+                }}
+                onContextMenu={(e) => !selectingZone && card && handleRightClick(e, card, 'spell', i, true)}
               >
                 {card ? (
                   card.faceUp ? (
@@ -700,9 +1066,12 @@ function Duel() {
             <div className="card-back"></div>
             <div className="zone-label">Extra</div>
           </div>
-          <div className="zone deck-zone">
+          <div className="zone deck-zone" onClick={handleDrawCard}>
             <div className="card-back"></div>
             <div className="zone-label">Deck</div>
+            {(currentTurn === 'player' ? playerDeck : aiDeck).length > 0 && (
+              <div className="deck-count">{(currentTurn === 'player' ? playerDeck : aiDeck).length}</div>
+            )}
           </div>
           <div className="zone graveyard-zone" onClick={() => handleGraveyardClick('player')}>
             <div className="card-placeholder">GY</div>
@@ -738,11 +1107,21 @@ function Duel() {
         {(currentTurn === 'player' ? playerHand : aiHand).map((card, i) => (
           <div 
             key={i} 
-            className="hand-card"
-            draggable
-            onDragStart={() => handleDragStart(card, i)}
+            className={`hand-card ${selectedHandCard?.index === i ? 'selected-hand-card' : ''}`}
             onMouseEnter={() => setHoveredCard(card)}
             onMouseLeave={() => setHoveredCard(null)}
+            onClick={() => handleHandCardClick(card, i)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setContextMenu({
+                x: e.clientX,
+                y: e.clientY,
+                card,
+                type: 'hand',
+                index: i,
+                isCurrentPlayer: true
+              })
+            }}
           >
             <img src={card.image_url} alt={card.name} />
           </div>
@@ -801,6 +1180,167 @@ function Duel() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Hand Card Summon Options */}
+      {selectedHandCard && !tributeMode && !selectingZone && (
+        <div className="summon-options-modal">
+          <div className="summon-options-content">
+            <div className="summon-options-header">
+              <img src={selectedHandCard.card.image_url} alt={selectedHandCard.card.name} className="summon-card-preview" />
+              <h3>{selectedHandCard.card.name}</h3>
+              {selectedHandCard.card.level && <p>⭐ Level {selectedHandCard.card.level}</p>}
+            </div>
+
+            <div className="summon-options-buttons">
+              {selectedHandCard.card.type.includes('Monster') && (
+                <>
+                  {(selectedHandCard.card.level || 0) < 5 && (
+                    <>
+                      <button 
+                        className="summon-option-btn normal"
+                        onClick={() => handleSummonOption('normal')}
+                      >
+                        ⚔️ Triệu hồi thường
+                      </button>
+                      <button 
+                        className="summon-option-btn set"
+                        onClick={() => handleSummonOption('set')}
+                      >
+                        🛡️ Úp bài
+                      </button>
+                    </>
+                  )}
+                  {(selectedHandCard.card.level || 0) >= 5 && (
+                    <button 
+                      className="summon-option-btn tribute"
+                      onClick={() => handleSummonOption('tribute')}
+                    >
+                      🔥 Triệu hồi hiến tế
+                    </button>
+                  )}
+                </>
+              )}
+              {(selectedHandCard.card.type.includes('Spell') || selectedHandCard.card.type.includes('Trap')) && (
+                <>
+                  <button 
+                    className="summon-option-btn activate"
+                    onClick={() => {
+                      setSummonMode('activate')
+                      setSelectingZone(true)
+                    }}
+                  >
+                    ✨ Kích hoạt
+                  </button>
+                  <button 
+                    className="summon-option-btn set"
+                    onClick={() => handleSummonOption('set')}
+                  >
+                    🎴 Úp bài
+                  </button>
+                </>
+              )}
+              <button 
+                className="summon-option-btn cancel"
+                onClick={() => setSelectedHandCard(null)}
+              >
+                ❌ Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tribute Mode Modal */}
+      {tributeMode && tributeCard && (
+        <div className="tribute-modal" onClick={handleCancelTribute}>
+          <div className="tribute-content" onClick={(e) => e.stopPropagation()}>
+            <div className="tribute-header">
+              <h2>🔥 Tribute Summon</h2>
+              <p>Chọn {tributeCard.tributesNeeded} monster để hiến tế</p>
+            </div>
+
+            <div className="tribute-target-card">
+              <img src={tributeCard.card.image_url} alt={tributeCard.card.name} />
+              <div className="tribute-target-info">
+                <h3>{tributeCard.card.name}</h3>
+                <p>⭐ Level {tributeCard.card.level}</p>
+                <p>ATK: {tributeCard.card.atk} / DEF: {tributeCard.card.def}</p>
+              </div>
+            </div>
+            
+            <div className="tribute-selection-status">
+              <p>Đã chọn: {selectedTributes.length} / {tributeCard.tributesNeeded}</p>
+            </div>
+
+            <div className="tribute-monsters-grid">
+              {tributeCard.availableMonsters.map((monster, index) => {
+                const isSelected = selectedTributes.some(m => m.id === monster.id)
+                return (
+                  <div 
+                    key={index}
+                    className={`tribute-monster-card ${isSelected ? 'selected' : ''}`}
+                    onClick={() => handleTributeSelect({ id: monster.id, card: monster, index })}
+                  >
+                    <img src={monster.image_url} alt={monster.name} />
+                    <div className="tribute-monster-name">{monster.name}</div>
+                    {isSelected && <div className="selected-badge">✓</div>}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="tribute-buttons">
+              {selectedTributes.length === tributeCard.tributesNeeded && (
+                <button 
+                  className="tribute-btn summon"
+                  onClick={() => handleConfirmTribute(true)}
+                >
+                  ⚔️ Tribute Summon
+                </button>
+              )}
+              <button 
+                className="tribute-btn cancel"
+                onClick={handleCancelTribute}
+              >
+                ❌ Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <>
+          <div className="context-menu-overlay" onClick={() => setContextMenu(null)} />
+          <div 
+            className="context-menu"
+            style={{ top: contextMenu.y, left: contextMenu.x }}
+          >
+            <div className="context-menu-header">
+              {contextMenu.card.name}
+            </div>
+            <button 
+              className="context-menu-item"
+              onClick={() => {
+                if (contextMenu.type === 'hand') {
+                  handleSendHandToGY(contextMenu.index)
+                } else {
+                  handleSendToGY()
+                }
+              }}
+            >
+              🗑️ Send to Graveyard
+            </button>
+            <button 
+              className="context-menu-item cancel"
+              onClick={() => setContextMenu(null)}
+            >
+              ❌ Cancel
+            </button>
+          </div>
+        </>
       )}
 
       {/* Graveyard Modal */}
