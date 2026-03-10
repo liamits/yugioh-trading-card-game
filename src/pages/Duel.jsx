@@ -47,6 +47,12 @@ function Duel() {
   const [selectedHandCard, setSelectedHandCard] = useState(null)
   const [summonMode, setSummonMode] = useState(null) // 'normal', 'tribute', 'set'
   const [selectingZone, setSelectingZone] = useState(false)
+  const [activatingSpell, setActivatingSpell] = useState(null)
+  const [spellTargetMode, setSpellTargetMode] = useState(false)
+  const [spellTargetType, setSpellTargetType] = useState(null) // 'monster', 'spell', 'player'
+  const [discardingCards, setDiscardingCards] = useState(false)
+  const [selectedDiscards, setSelectedDiscards] = useState([])
+  const [handLimit, setHandLimit] = useState(6)
 
   useEffect(() => {
     if (!player || !ai) {
@@ -119,7 +125,36 @@ function Duel() {
   }
 
   const handleEndTurn = () => {
+    const currentHand = currentTurn === 'player' ? playerHand : aiHand
+    
+    // Check hand limit before ending turn
+    if (currentHand.length > handLimit) {
+      // Need to discard cards
+      setDiscardingCards(true)
+      setSelectedDiscards([])
+      return
+    }
+    
+    // Proceed with end turn
+    proceedEndTurn()
+  }
+
+  const proceedEndTurn = () => {
     const nextTurn = currentTurn === 'player' ? 'ai' : 'player'
+    
+    // Enable trap cards that were set this turn
+    const currentField = currentTurn === 'player' ? playerField : aiField
+    const setCurrentField = currentTurn === 'player' ? setPlayerField : setAiField
+    
+    const updatedSpells = currentField.spells.map(card => {
+      if (card && !card.faceUp && card.type.includes('Trap')) {
+        return { ...card, canActivate: true }
+      }
+      return card
+    })
+    
+    setCurrentField({ ...currentField, spells: updatedSpells })
+    
     setCurrentTurn(nextTurn)
     
     // Draw a card for the next player
@@ -132,6 +167,41 @@ function Duel() {
       setAiHand([...aiHand, newCard])
       setAiDeck(aiDeck.slice(1))
     }
+  }
+
+  const handleDiscardSelect = (index) => {
+    if (selectedDiscards.includes(index)) {
+      setSelectedDiscards(selectedDiscards.filter(i => i !== index))
+    } else {
+      setSelectedDiscards([...selectedDiscards, index])
+    }
+  }
+
+  const handleConfirmDiscard = () => {
+    const currentHand = currentTurn === 'player' ? playerHand : aiHand
+    const setCurrentHand = currentTurn === 'player' ? setPlayerHand : setAiHand
+    const graveyard = currentTurn === 'player' ? playerGraveyard : aiGraveyard
+    const setGraveyard = currentTurn === 'player' ? setPlayerGraveyard : setAiGraveyard
+    
+    const cardsToDiscard = currentHand.length - handLimit
+    
+    if (selectedDiscards.length !== cardsToDiscard) {
+      alert(`Bạn phải loại bỏ ${cardsToDiscard} lá bài!`)
+      return
+    }
+    
+    // Send selected cards to graveyard
+    const discardedCards = selectedDiscards.map(i => currentHand[i])
+    setGraveyard([...graveyard, ...discardedCards])
+    
+    // Remove from hand
+    const newHand = currentHand.filter((_, i) => !selectedDiscards.includes(i))
+    setCurrentHand(newHand)
+    
+    // Reset and proceed
+    setDiscardingCards(false)
+    setSelectedDiscards([])
+    proceedEndTurn()
   }
 
   const handleExtraDeckClick = () => {
@@ -173,12 +243,20 @@ function Duel() {
     }
 
     if (option === 'normal') {
-      // Normal Summon (no tribute) - only for level 1-4
+      // Normal Summon Attack Position (no tribute) - only for level 1-4
       if (level >= 5) {
         alert('Monster level 5+ cần tribute summon!')
         return
       }
       setSummonMode('normal')
+      setSelectingZone(true)
+    } else if (option === 'defense') {
+      // Normal Summon Defense Position (face-up) - only for level 1-4
+      if (level >= 5) {
+        alert('Monster level 5+ cần tribute summon!')
+        return
+      }
+      setSummonMode('defense')
       setSelectingZone(true)
     } else if (option === 'tribute') {
       // Tribute Summon - only face-up for level 5+
@@ -200,7 +278,7 @@ function Duel() {
       setTributeCard({ card, tributesNeeded, faceUp: true, availableMonsters })
       setSelectedTributes([])
     } else if (option === 'set') {
-      // Set (face-down) - only for level 1-4 monsters or spell/trap
+      // Set (face-down defense) - only for level 1-4 monsters or spell/trap
       if (card.type.includes('Monster') && level >= 5) {
         alert('Monster level 5+ không thể úp! Chỉ có thể Tribute Summon.')
         return
@@ -228,20 +306,50 @@ function Duel() {
       return
     }
 
+    const card = selectedHandCard.card
+
     // Place card
     if (type === 'monster') {
       const newMonsters = [...field.monsters]
-      newMonsters[zoneIndex] = {
-        ...selectedHandCard.card,
-        faceUp: summonMode === 'normal',
-        position: summonMode === 'normal' ? 'attack' : 'defense'
+      
+      if (summonMode === 'normal') {
+        // Attack position, face-up
+        newMonsters[zoneIndex] = {
+          ...card,
+          faceUp: true,
+          position: 'attack'
+        }
+      } else if (summonMode === 'defense') {
+        // Defense position, face-up
+        newMonsters[zoneIndex] = {
+          ...card,
+          faceUp: true,
+          position: 'defense'
+        }
+      } else if (summonMode === 'set') {
+        // Face-down defense
+        newMonsters[zoneIndex] = {
+          ...card,
+          faceUp: false,
+          position: 'defense'
+        }
       }
+      
       setField({ ...field, monsters: newMonsters })
     } else {
       const newSpells = [...field.spells]
+      
+      // If activating spell, process effect immediately
+      if (summonMode === 'activate') {
+        handleSpellActivation(card, zoneIndex)
+        return
+      }
+      
+      // If setting spell/trap
       newSpells[zoneIndex] = {
-        ...selectedHandCard.card,
-        faceUp: summonMode === 'activate'
+        ...card,
+        faceUp: false,
+        canActivate: false // Can't activate until next turn
       }
       setField({ ...field, spells: newSpells })
     }
@@ -254,6 +362,104 @@ function Duel() {
     setSelectedHandCard(null)
     setSummonMode(null)
     setSelectingZone(false)
+  }
+
+  const handleSpellActivation = (card, zoneIndex) => {
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+    const graveyard = isPlayerTurn ? playerGraveyard : aiGraveyard
+    const setGraveyard = isPlayerTurn ? setPlayerGraveyard : setAiGraveyard
+
+    // Check spell type and handle accordingly
+    const spellType = card.race || '' // race field contains spell type
+
+    if (spellType.includes('Continuous') || spellType.includes('Field') || spellType.includes('Equip')) {
+      // Continuous/Field/Equip spells stay on field
+      const newSpells = [...field.spells]
+      newSpells[zoneIndex] = {
+        ...card,
+        faceUp: true,
+        isActive: true
+      }
+      setField({ ...field, spells: newSpells })
+      
+      // Remove from hand
+      const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
+      setHand(newHand)
+      
+      // Show activation
+      setActivatingSpell(card)
+      setTimeout(() => setActivatingSpell(null), 3000)
+      
+      // Apply effect based on card
+      applySpellEffect(card, isPlayerTurn)
+    } else {
+      // Normal/Quick-Play spells go to GY after activation
+      // Remove from hand
+      const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
+      setHand(newHand)
+      
+      // Show activation
+      setActivatingSpell(card)
+      setTimeout(() => {
+        setActivatingSpell(null)
+        // Send to GY
+        setGraveyard([...graveyard, card])
+      }, 3000)
+      
+      // Apply effect based on card
+      applySpellEffect(card, isPlayerTurn)
+    }
+
+    // Reset states
+    setSelectedHandCard(null)
+    setSummonMode(null)
+    setSelectingZone(false)
+  }
+
+  const applySpellEffect = (card, isPlayerTurn) => {
+    const cardName = card.name.toLowerCase()
+    
+    // Common spell effects (simplified)
+    if (cardName.includes('pot of greed')) {
+      // Draw 2 cards
+      const deck = isPlayerTurn ? playerDeck : aiDeck
+      const hand = isPlayerTurn ? playerHand : aiHand
+      const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
+      const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+      
+      if (deck.length >= 2) {
+        const drawnCards = deck.slice(0, 2)
+        setHand([...hand, ...drawnCards])
+        setDeck(deck.slice(2))
+        alert(`${card.name}: Rút 2 lá bài!`)
+      }
+    } else if (cardName.includes('dark hole')) {
+      // Destroy all monsters
+      setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
+      setAiField({ ...aiField, monsters: [null, null, null, null, null] })
+      alert(`${card.name}: Phá hủy tất cả monsters trên field!`)
+    } else if (cardName.includes('monster reborn')) {
+      // Revive monster from GY (simplified - just show message)
+      alert(`${card.name}: Chọn 1 monster từ GY để hồi sinh! (Tính năng đang phát triển)`)
+    } else if (cardName.includes('raigeki')) {
+      // Destroy all opponent monsters
+      if (isPlayerTurn) {
+        setAiField({ ...aiField, monsters: [null, null, null, null, null] })
+      } else {
+        setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
+      }
+      alert(`${card.name}: Phá hủy tất cả monsters của đối thủ!`)
+    } else if (cardName.includes('mystical space typhoon') || cardName.includes('mst')) {
+      // Destroy 1 spell/trap
+      alert(`${card.name}: Chọn 1 Spell/Trap để phá hủy! (Tính năng đang phát triển)`)
+    } else {
+      // Generic spell activation
+      alert(`Kích hoạt: ${card.name}\n\n${card.desc.substring(0, 150)}...`)
+    }
   }
 
   const handleDragStart = (card, index) => {
@@ -320,6 +526,19 @@ function Duel() {
     // Close context menu if open
     setContextMenu(null)
 
+    // If clicking on set spell/trap to activate it
+    if (type === 'spell' && !card.faceUp && isCurrentPlayer && !battlePhase) {
+      // Check if it's a trap (can't activate same turn it was set)
+      if (card.type.includes('Trap') && card.canActivate === false) {
+        alert('Trap card không thể kích hoạt trong turn được set!')
+        return
+      }
+      
+      // Activate the set spell/trap
+      handleSetSpellActivation(card, index)
+      return
+    }
+
     // If in battle phase and clicking own monster
     if (battlePhase && isCurrentPlayer && type === 'monster' && card.faceUp && card.position === 'attack') {
       setSelectedAttacker({ card, index })
@@ -331,19 +550,45 @@ function Duel() {
       handleBattle(selectedAttacker, { card, index })
       return
     }
+  }
 
-    // Normal click - toggle position
-    if (type === 'monster' && card.faceUp && isCurrentPlayer && !battlePhase) {
-      const field = currentTurn === 'player' ? playerField : aiField
-      const setField = currentTurn === 'player' ? setPlayerField : setAiField
+  const handleSetSpellActivation = (card, zoneIndex) => {
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const graveyard = isPlayerTurn ? playerGraveyard : aiGraveyard
+    const setGraveyard = isPlayerTurn ? setPlayerGraveyard : setAiGraveyard
 
-      const newMonsters = [...field.monsters]
-      newMonsters[index] = {
-        ...card,
-        position: card.position === 'attack' ? 'defense' : 'attack'
-      }
-      setField({ ...field, monsters: newMonsters })
+    const spellType = card.race || ''
+
+    // Flip the card face-up
+    const newSpells = [...field.spells]
+    newSpells[zoneIndex] = {
+      ...card,
+      faceUp: true,
+      isActive: true
     }
+    setField({ ...field, spells: newSpells })
+
+    // Show activation
+    setActivatingSpell(card)
+
+    // If it's not continuous/field/equip, send to GY after effect
+    if (!spellType.includes('Continuous') && !spellType.includes('Field') && !spellType.includes('Equip')) {
+      setTimeout(() => {
+        setActivatingSpell(null)
+        // Remove from field and send to GY
+        const finalSpells = [...newSpells]
+        finalSpells[zoneIndex] = null
+        setField({ ...field, spells: finalSpells })
+        setGraveyard([...graveyard, card])
+      }, 3000)
+    } else {
+      setTimeout(() => setActivatingSpell(null), 3000)
+    }
+
+    // Apply effect
+    applySpellEffect(card, isPlayerTurn)
   }
 
   const handleRightClick = (e, card, type, index, isCurrentPlayer) => {
@@ -961,6 +1206,8 @@ function Duel() {
                       src={card.image_url} 
                       alt={card.name}
                       className="field-card"
+                      onMouseEnter={() => setHoveredCard(card)}
+                      onMouseLeave={() => setHoveredCard(null)}
                     />
                   ) : (
                     <div className="card-back"></div>
@@ -979,6 +1226,8 @@ function Duel() {
                 key={i} 
                 className={`zone monster-zone ${battlePhase && card ? 'battle-target' : ''}`}
                 onClick={() => card && battlePhase && selectedAttacker && handleCardClick(card, 'monster', i, false)}
+                onMouseEnter={() => card && card.faceUp && setHoveredCard(card)}
+                onMouseLeave={() => setHoveredCard(null)}
               >
                 {card ? (
                   card.faceUp ? (
@@ -1010,6 +1259,8 @@ function Duel() {
                     handleCardClick(card, 'monster', i, true)
                   }
                 }}
+                onMouseEnter={() => card && setHoveredCard(card)}
+                onMouseLeave={() => setHoveredCard(null)}
                 onContextMenu={(e) => !selectingZone && card && handleRightClick(e, card, 'monster', i, true)}
               >
                 {card ? (
@@ -1034,12 +1285,14 @@ function Duel() {
             {(currentTurn === 'player' ? playerField : aiField).spells.map((card, i) => (
               <div 
                 key={i} 
-                className={`zone spell-trap-zone ${selectingZone && selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap') ? 'zone-selectable' : ''}`}
+                className={`zone spell-trap-zone ${selectingZone && (selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap')) ? 'zone-selectable' : ''} ${card && !card.faceUp ? 'has-set-card' : ''}`}
                 onClick={() => {
                   if (selectingZone && !card && (selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap'))) {
                     handleZoneSelect(i, 'spell')
                   }
                 }}
+                onMouseEnter={() => card && setHoveredCard(card)}
+                onMouseLeave={() => setHoveredCard(null)}
                 onContextMenu={(e) => !selectingZone && card && handleRightClick(e, card, 'spell', i, true)}
               >
                 {card ? (
@@ -1050,7 +1303,7 @@ function Duel() {
                       className="field-card"
                     />
                   ) : (
-                    <div className="card-back"></div>
+                    <div className="card-back set-card-glow"></div>
                   )
                 ) : (
                   <div className="card-placeholder"></div>
@@ -1201,13 +1454,19 @@ function Duel() {
                         className="summon-option-btn normal"
                         onClick={() => handleSummonOption('normal')}
                       >
-                        ⚔️ Triệu hồi thường
+                        ⚔️ Triệu hồi thường (Tấn công)
+                      </button>
+                      <button 
+                        className="summon-option-btn defense"
+                        onClick={() => handleSummonOption('defense')}
+                      >
+                        🛡️ Triệu hồi thường (Phòng thủ)
                       </button>
                       <button 
                         className="summon-option-btn set"
                         onClick={() => handleSummonOption('set')}
                       >
-                        🛡️ Úp bài
+                        🎴 Úp bài (Thế thủ)
                       </button>
                     </>
                   )}
@@ -1321,6 +1580,51 @@ function Duel() {
             <div className="context-menu-header">
               {contextMenu.card.name}
             </div>
+            
+            {/* Change position option for monsters */}
+            {contextMenu.type === 'monster' && contextMenu.card.faceUp && contextMenu.isCurrentPlayer && !battlePhase && (
+              <button 
+                className="context-menu-item position"
+                onClick={() => {
+                  const field = currentTurn === 'player' ? playerField : aiField
+                  const setField = currentTurn === 'player' ? setPlayerField : setAiField
+                  const newMonsters = [...field.monsters]
+                  newMonsters[contextMenu.index] = {
+                    ...contextMenu.card,
+                    position: contextMenu.card.position === 'attack' ? 'defense' : 'attack'
+                  }
+                  setField({ ...field, monsters: newMonsters })
+                  setContextMenu(null)
+                }}
+              >
+                {contextMenu.card.position === 'attack' ? '🛡️ Chuyển sang Thế Thủ' : '⚔️ Chuyển sang Tấn Công'}
+              </button>
+            )}
+            
+            {/* Activate option for set spell/trap */}
+            {contextMenu.type === 'spell' && !contextMenu.card.faceUp && contextMenu.isCurrentPlayer && (
+              <>
+                {contextMenu.card.type.includes('Trap') && contextMenu.card.canActivate === false ? (
+                  <button 
+                    className="context-menu-item disabled"
+                    disabled
+                  >
+                    ⚠️ Trap chưa thể kích hoạt (phải đợi turn sau)
+                  </button>
+                ) : (
+                  <button 
+                    className="context-menu-item activate"
+                    onClick={() => {
+                      handleSetSpellActivation(contextMenu.card, contextMenu.index)
+                      setContextMenu(null)
+                    }}
+                  >
+                    ✨ Kích hoạt
+                  </button>
+                )}
+              </>
+            )}
+            
             <button 
               className="context-menu-item"
               onClick={() => {
@@ -1419,6 +1723,63 @@ function Duel() {
                 <p className="description-label">Hiệu ứng:</p>
                 <p>{hoveredCard.desc}</p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spell Activation Animation */}
+      {activatingSpell && (
+        <div className="spell-activation-overlay">
+          <div className="spell-activation-content">
+            <div className="spell-activation-flash"></div>
+            <div className="spell-card-display">
+              <img src={activatingSpell.image_url} alt={activatingSpell.name} />
+            </div>
+            <div className="spell-activation-text">
+              <h2>✨ SPELL CARD ACTIVATED! ✨</h2>
+              <p>{activatingSpell.name}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discard Cards Modal */}
+      {discardingCards && (
+        <div className="discard-modal">
+          <div className="discard-content">
+            <div className="discard-header">
+              <h2>⚠️ Giới hạn bài trên tay</h2>
+              <p>Bạn có {(currentTurn === 'player' ? playerHand : aiHand).length} lá bài. Giới hạn là {handLimit} lá.</p>
+              <p className="discard-instruction">Chọn {(currentTurn === 'player' ? playerHand : aiHand).length - handLimit} lá để loại bỏ vào Graveyard</p>
+            </div>
+
+            <div className="discard-cards-grid">
+              {(currentTurn === 'player' ? playerHand : aiHand).map((card, i) => (
+                <div 
+                  key={i}
+                  className={`discard-card ${selectedDiscards.includes(i) ? 'selected' : ''}`}
+                  onClick={() => handleDiscardSelect(i)}
+                >
+                  <img src={card.image_url} alt={card.name} />
+                  <div className="discard-card-name">{card.name}</div>
+                  {selectedDiscards.includes(i) && <div className="discard-badge">✓</div>}
+                </div>
+              ))}
+            </div>
+
+            <div className="discard-status">
+              <p>Đã chọn: {selectedDiscards.length} / {(currentTurn === 'player' ? playerHand : aiHand).length - handLimit}</p>
+            </div>
+
+            <div className="discard-buttons">
+              <button 
+                className="discard-btn confirm"
+                onClick={handleConfirmDiscard}
+                disabled={selectedDiscards.length !== ((currentTurn === 'player' ? playerHand : aiHand).length - handLimit)}
+              >
+                ✓ Xác nhận loại bỏ
+              </button>
             </div>
           </div>
         </div>
