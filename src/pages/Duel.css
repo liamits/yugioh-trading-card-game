@@ -2336,3 +2336,359 @@
 .discard-content::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 119, 198, 0.6);
 }
+/* Fusion Summon Modal */
+.fusion-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(10, 14, 39, 0.95);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3500;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.fusion-content {
+  background: rgba(26, 31, 58, 0.98);
+  border: 3px solid #ff77c6;
+  border-radius: 25px;
+  padding: 40px;
+  max-width: 95%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8),
+              0 0 40px rgba(255, 119, 198, 0.5);
+  animation: slideIn 0.4s ease-out;
+}
+
+.fusion-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-bottom: 20px;
+  border-bottom: 2px solid rgba(255, 119, 198, 0.3);
+}
+
+.fusion-header h2 {
+  font-size: 3rem;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 15px;
+  background: linear-gradient(135deg, #ff77c6 0%, #8ab4f8 50%, #c58af9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 0 30px rgba(255, 119, 198, 0.8);
+}
+
+.fusion-header p {
+  font-size: 1.2rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.fusion-sections {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.fusion-monsters-section,
+.fusion-materials-section {
+  flex: 1;
+}
+
+.fusion-monsters-section h3,
+.fusion-materials-section h3 {
+  font-size: 1.5rem;
+  color: #fff;
+  font-weight: 700;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.fusion-monsters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.fusion-monster-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 15px;
+  border-radius: 15px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 3px solid rgba(255, 119, 198, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.fusion-monster-card:hover {
+  transform: translateY(-5px);
+  border-color: #ff77c6;
+  background: rgba(255, 119, 198, 0.1);
+  box-shadow: 0 10px 30px rgba(255, 119, 198, 0.5);
+}
+
+.fusion-monster-card.selected {
+  border-color: #8ab4f8;
+  background: rgba(138, 180, 248, 0.2);
+  box-shadow: 0 0 25px rgba(138, 180, 248, 0.8);
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+.fusion-monster-card img {
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+}
+
+.fusion-monster-name {
+  color: #fff;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.fusion-monster-stats {
+  color: #ff77c6;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.fusion-selected-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 35px;
+  height: 35px;
+  background: linear-gradient(135deg, #8ab4f8 0%, #c58af9 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: #fff;
+  font-weight: 900;
+  border: 3px solid #fff;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.selected-materials-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  min-height: 120px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px dashed rgba(255, 119, 198, 0.3);
+  border-radius: 15px;
+}
+
+.selected-material {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 80px;
+}
+
+.selected-material img {
+  width: 100%;
+  height: auto;
+  border-radius: 8px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5);
+}
+
+.material-name {
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.material-source {
+  color: #8ab4f8;
+  font-size: 0.6rem;
+  font-weight: 600;
+}
+
+.fusion-instructions {
+  text-align: center;
+  margin-bottom: 25px;
+  padding: 20px;
+  background: rgba(138, 180, 248, 0.1);
+  border: 2px solid rgba(138, 180, 248, 0.3);
+  border-radius: 15px;
+}
+
+.fusion-instructions p {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin: 5px 0;
+}
+
+.fusion-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.fusion-btn {
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border-radius: 15px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.fusion-btn.confirm {
+  background: linear-gradient(135deg, #ff77c6 0%, #8ab4f8 100%);
+  color: #0a0e27;
+  border-color: #ff77c6;
+}
+
+.fusion-btn.confirm:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 10px 30px rgba(255, 119, 198, 0.6);
+}
+
+.fusion-btn.confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: rgba(255, 119, 198, 0.3);
+}
+
+.fusion-btn.cancel {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.fusion-btn.cancel:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+/* Fusion Material Selection */
+.fusion-material-selectable {
+  border-color: #ff77c6 !important;
+  cursor: pointer !important;
+  animation: fusionPulse 2s ease-in-out infinite;
+}
+
+@keyframes fusionPulse {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(255, 119, 198, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(255, 119, 198, 0.8);
+  }
+}
+
+.selected-fusion-material {
+  border-color: #8ab4f8 !important;
+  background: rgba(138, 180, 248, 0.2) !important;
+  box-shadow: 0 0 25px rgba(138, 180, 248, 0.8) !important;
+  animation: glow 1.5s ease-in-out infinite;
+}
+
+.fusion-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.fusion-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.fusion-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 119, 198, 0.4);
+  border-radius: 10px;
+}
+
+.fusion-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 119, 198, 0.6);
+}
+
+@media (max-width: 1200px) {
+  .fusion-sections {
+    flex-direction: column;
+  }
+  
+  .fusion-monsters-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+/* ATK/DEF Overlay Styles */
+.monster-card-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.atk-def-overlay {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.8);
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 10px;
+  font-weight: bold;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(2px);
+}
+
+.atk-value {
+  color: #ff6b6b;
+  text-shadow: 0 0 4px rgba(255, 107, 107, 0.6);
+}
+
+.def-value {
+  color: #4ecdc4;
+  text-shadow: 0 0 4px rgba(78, 205, 196, 0.6);
+}
+
+/* Enhanced ATK/DEF for buffed/debuffed monsters */
+.monster-card-container.buffed .atk-value {
+  color: #51cf66;
+  text-shadow: 0 0 6px rgba(81, 207, 102, 0.8);
+  animation: pulse 1s infinite;
+}
+
+.monster-card-container.debuffed .atk-value {
+  color: #ff8787;
+  text-shadow: 0 0 6px rgba(255, 135, 135, 0.8);
+  animation: pulse 1s infinite;
+}
+
+.monster-card-container.buffed .def-value {
+  color: #74c0fc;
+  text-shadow: 0 0 6px rgba(116, 192, 252, 0.8);
+  animation: pulse 1s infinite;
+}
+
+.monster-card-container.debuffed .def-value {
+  color: #ffa8a8;
+  text-shadow: 0 0 6px rgba(255, 168, 168, 0.8);
+  animation: pulse 1s infinite;
+}

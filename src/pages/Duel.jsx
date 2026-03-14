@@ -53,6 +53,16 @@ function Duel() {
   const [discardingCards, setDiscardingCards] = useState(false)
   const [selectedDiscards, setSelectedDiscards] = useState([])
   const [handLimit, setHandLimit] = useState(6)
+  const [forcedDiscard, setForcedDiscard] = useState(null) // { amount, reason }
+  const [fusionMode, setFusionMode] = useState(false)
+  const [selectedFusionMaterials, setSelectedFusionMaterials] = useState([])
+  const [availableFusions, setAvailableFusions] = useState([])
+  const [selectedFusionMonster, setSelectedFusionMonster] = useState(null)
+  const [monsterRebornMode, setMonsterRebornMode] = useState(false)
+  const [availableRebornMonsters, setAvailableRebornMonsters] = useState([])
+  const [dragonSummonMode, setDragonSummonMode] = useState(false)
+  const [availableDragons, setAvailableDragons] = useState([])
+  const [normalSummonUsed, setNormalSummonUsed] = useState(false)
 
   useEffect(() => {
     if (!player || !ai) {
@@ -157,6 +167,9 @@ function Duel() {
     
     setCurrentTurn(nextTurn)
     
+    // Reset normal summon for next turn
+    setNormalSummonUsed(false)
+    
     // Draw a card for the next player
     if (nextTurn === 'player' && playerDeck.length > 0) {
       const newCard = playerDeck[0]
@@ -183,7 +196,12 @@ function Duel() {
     const graveyard = currentTurn === 'player' ? playerGraveyard : aiGraveyard
     const setGraveyard = currentTurn === 'player' ? setPlayerGraveyard : setAiGraveyard
     
-    const cardsToDiscard = currentHand.length - handLimit
+    let cardsToDiscard
+    if (forcedDiscard) {
+      cardsToDiscard = forcedDiscard.amount
+    } else {
+      cardsToDiscard = currentHand.length - handLimit
+    }
     
     if (selectedDiscards.length !== cardsToDiscard) {
       alert(`Bạn phải loại bỏ ${cardsToDiscard} lá bài!`)
@@ -198,10 +216,16 @@ function Duel() {
     const newHand = currentHand.filter((_, i) => !selectedDiscards.includes(i))
     setCurrentHand(newHand)
     
-    // Reset and proceed
+    // Reset states
     setDiscardingCards(false)
     setSelectedDiscards([])
-    proceedEndTurn()
+    
+    if (forcedDiscard) {
+      setForcedDiscard(null)
+      alert(`Đã loại bỏ ${cardsToDiscard} lá bài theo hiệu ứng spell!`)
+    } else {
+      proceedEndTurn()
+    }
   }
 
   const handleExtraDeckClick = () => {
@@ -248,6 +272,13 @@ function Duel() {
         alert('Monster level 5+ cần tribute summon!')
         return
       }
+      
+      // Check if normal summon already used
+      if (normalSummonUsed) {
+        alert('Bạn đã Normal Summon trong turn này!')
+        return
+      }
+      
       setSummonMode('normal')
       setSelectingZone(true)
     } else if (option === 'defense') {
@@ -256,12 +287,25 @@ function Duel() {
         alert('Monster level 5+ cần tribute summon!')
         return
       }
+      
+      // Check if normal summon already used
+      if (normalSummonUsed) {
+        alert('Bạn đã Normal Summon trong turn này!')
+        return
+      }
+      
       setSummonMode('defense')
       setSelectingZone(true)
     } else if (option === 'tribute') {
       // Tribute Summon - only face-up for level 5+
       if (tributesNeeded === 0) {
         alert('Monster này không cần tribute!')
+        return
+      }
+      
+      // Check if normal summon already used
+      if (normalSummonUsed) {
+        alert('Bạn đã Normal Summon trong turn này!')
         return
       }
 
@@ -283,6 +327,13 @@ function Duel() {
         alert('Monster level 5+ không thể úp! Chỉ có thể Tribute Summon.')
         return
       }
+      
+      // Check if normal summon already used (set also counts as normal summon)
+      if (normalSummonUsed) {
+        alert('Bạn đã Normal Summon trong turn này!')
+        return
+      }
+      
       setSummonMode('set')
       setSelectingZone(true)
     }
@@ -319,6 +370,8 @@ function Duel() {
           faceUp: true,
           position: 'attack'
         }
+        // Mark normal summon as used
+        setNormalSummonUsed(true)
       } else if (summonMode === 'defense') {
         // Defense position, face-up
         newMonsters[zoneIndex] = {
@@ -326,6 +379,8 @@ function Duel() {
           faceUp: true,
           position: 'defense'
         }
+        // Mark normal summon as used
+        setNormalSummonUsed(true)
       } else if (summonMode === 'set') {
         // Face-down defense
         newMonsters[zoneIndex] = {
@@ -333,6 +388,8 @@ function Duel() {
           faceUp: false,
           position: 'defense'
         }
+        // Mark normal summon as used (set counts as normal summon)
+        setNormalSummonUsed(true)
       }
       
       setField({ ...field, monsters: newMonsters })
@@ -375,8 +432,20 @@ function Duel() {
 
     // Check spell type and handle accordingly
     const spellType = card.race || '' // race field contains spell type
+    const cardName = card.name.toLowerCase()
+    
+    // Check if it's a continuous/field/equip spell that should stay on field
+    const shouldStayOnField = spellType.includes('Continuous') || 
+                             spellType.includes('Field') || 
+                             spellType.includes('Equip') ||
+                             cardName.includes('swords of revealing light') ||
+                             cardName.includes('megamorph') ||
+                             cardName.includes('book of secret arts') ||
+                             cardName.includes('horn of the unicorn') ||
+                             cardName.includes('shadow spell') ||
+                             cardName.includes('spellbinding circle')
 
-    if (spellType.includes('Continuous') || spellType.includes('Field') || spellType.includes('Equip')) {
+    if (shouldStayOnField) {
       // Continuous/Field/Equip spells stay on field
       const newSpells = [...field.spells]
       newSpells[zoneIndex] = {
@@ -398,16 +467,17 @@ function Duel() {
       applySpellEffect(card, isPlayerTurn)
     } else {
       // Normal/Quick-Play spells go to GY after activation
-      // Remove from hand
+      // Remove from hand FIRST
       const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
       setHand(newHand)
+      
+      // Send to GY immediately
+      setGraveyard([...graveyard, card])
       
       // Show activation
       setActivatingSpell(card)
       setTimeout(() => {
         setActivatingSpell(null)
-        // Send to GY
-        setGraveyard([...graveyard, card])
       }, 3000)
       
       // Apply effect based on card
@@ -422,44 +492,928 @@ function Duel() {
 
   const applySpellEffect = (card, isPlayerTurn) => {
     const cardName = card.name.toLowerCase()
+    const effectText = card.desc.toLowerCase()
     
-    // Common spell effects (simplified)
+    // Parse and apply effects based on card description
     if (cardName.includes('pot of greed')) {
       // Draw 2 cards
-      const deck = isPlayerTurn ? playerDeck : aiDeck
-      const hand = isPlayerTurn ? playerHand : aiHand
-      const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
-      const setHand = isPlayerTurn ? setPlayerHand : setAiHand
-      
-      if (deck.length >= 2) {
-        const drawnCards = deck.slice(0, 2)
-        setHand([...hand, ...drawnCards])
-        setDeck(deck.slice(2))
-        alert(`${card.name}: Rút 2 lá bài!`)
-      }
+      handleDrawEffect(2, isPlayerTurn)
+    } else if (cardName.includes('graceful charity')) {
+      // Draw 3, then discard 2
+      handleDrawThenDiscard(3, 2, isPlayerTurn)
     } else if (cardName.includes('dark hole')) {
-      // Destroy all monsters
-      setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
-      setAiField({ ...aiField, monsters: [null, null, null, null, null] })
-      alert(`${card.name}: Phá hủy tất cả monsters trên field!`)
-    } else if (cardName.includes('monster reborn')) {
-      // Revive monster from GY (simplified - just show message)
-      alert(`${card.name}: Chọn 1 monster từ GY để hồi sinh! (Tính năng đang phát triển)`)
+      // Destroy all monsters on the field
+      handleDestroyAllMonsters()
     } else if (cardName.includes('raigeki')) {
-      // Destroy all opponent monsters
-      if (isPlayerTurn) {
-        setAiField({ ...aiField, monsters: [null, null, null, null, null] })
-      } else {
-        setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
-      }
-      alert(`${card.name}: Phá hủy tất cả monsters của đối thủ!`)
+      // Destroy all opponent's monsters
+      handleDestroyOpponentMonsters(isPlayerTurn)
+    } else if (cardName.includes('fissure')) {
+      // Destroy 1 face-up monster with lowest ATK
+      handleFissure(isPlayerTurn)
+    } else if (cardName.includes('heavy storm')) {
+      // Destroy all Spell/Trap cards on field
+      handleHeavyStorm()
+    } else if (cardName.includes('monster reborn')) {
+      // Special Summon 1 monster from either GY
+      handleMonsterReborn(isPlayerTurn)
+    } else if (cardName.includes('polymerization')) {
+      // Fusion Summon
+      handlePolymerization(isPlayerTurn)
+    } else if (cardName.includes('de-spell')) {
+      // Destroy 1 Spell card on the field
+      handleDeSpell(isPlayerTurn)
+    } else if (cardName.includes('flute of summoning dragon')) {
+      // Special Summon 1 Dragon from hand
+      handleFluteOfSummoningDragon(isPlayerTurn)
+    } else if (cardName.includes('megamorph')) {
+      // Equip: Double ATK if LP < opponent, halve if LP > opponent
+      handleMegamorph(isPlayerTurn)
+    } else if (cardName.includes('dark magic curtain')) {
+      // Pay half LP, Special Summon Dark Magician
+      handleDarkMagicCurtain(isPlayerTurn)
+    } else if (cardName.includes('dedication through light and darkness')) {
+      // Tribute Dark Magician, Special Summon Dark Magician of Chaos
+      handleDedicationThroughLightAndDarkness(isPlayerTurn)
+    } else if (cardName.includes('book of secret arts')) {
+      // Equip: Spellcaster gains 300 ATK/DEF
+      handleBookOfSecretArts(isPlayerTurn)
+    } else if (cardName.includes('brain control')) {
+      // Take control of opponent monster for 1 turn
+      handleBrainControl(isPlayerTurn)
+    } else if (cardName.includes('horn of the unicorn')) {
+      // Equip: Monster gains 700 ATK/DEF
+      handleHornOfTheUnicorn(isPlayerTurn)
+    } else if (cardName.includes('mystic box')) {
+      // Destroy 1 monster, give control of another
+      handleMysticBox(isPlayerTurn)
+    } else if (cardName.includes('swords of revealing light')) {
+      // Opponent cannot attack for 3 turns
+      handleSwordsOfRevealingLight(isPlayerTurn)
+    } else if (cardName.includes('the eye of timaeus')) {
+      // Fusion Summon Dark Magician fusion
+      handleEyeOfTimaeus(isPlayerTurn)
+    } else if (cardName.includes('multiply')) {
+      // Special Summon Kuriboh tokens
+      handleMultiply(isPlayerTurn)
+    } else if (cardName.includes('crush card virus')) {
+      // Destroy all monsters with 1500+ ATK in opponent's hand/deck/field
+      handleCrushCardVirus(isPlayerTurn)
+    } else if (cardName.includes('gift of the mystical elf')) {
+      // Gain LP equal to number of monsters x 300
+      handleGiftOfMysticalElf(isPlayerTurn)
+    } else if (cardName.includes('shadow spell')) {
+      // Equip: Target monster loses 700 ATK
+      handleShadowSpell(isPlayerTurn)
+    } else if (cardName.includes('negate attack')) {
+      // Negate opponent's attack and end Battle Phase
+      handleNegateAttack(isPlayerTurn)
+    } else if (cardName.includes('lightforce sword')) {
+      // Banish 1 random card from opponent's hand
+      handleLightforceSword(isPlayerTurn)
+    } else if (cardName.includes('magic cylinder')) {
+      // Negate attack, inflict damage equal to ATK
+      handleMagicCylinder(isPlayerTurn)
+    } else if (cardName.includes('magical hats')) {
+      // Set 2 tokens to protect monsters
+      handleMagicalHats(isPlayerTurn)
+    } else if (cardName.includes('mirror force')) {
+      // Destroy all opponent's Attack Position monsters
+      handleMirrorForce(isPlayerTurn)
+    } else if (cardName.includes('seven tools of the bandit')) {
+      // Negate Trap card activation
+      handleSevenToolsOfTheBandit(isPlayerTurn)
+    } else if (cardName.includes('spellbinding circle')) {
+      // Equip: Monster loses 700 ATK, cannot attack
+      handleSpellbindingCircle(isPlayerTurn)
+    } else if (cardName.includes('time seal')) {
+      // Skip opponent's next Draw Phase
+      handleTimeSeal(isPlayerTurn)
+    } else if (cardName.includes('chain destruction')) {
+      // Destroy all copies of destroyed monster
+      handleChainDestruction(isPlayerTurn)
     } else if (cardName.includes('mystical space typhoon') || cardName.includes('mst')) {
-      // Destroy 1 spell/trap
-      alert(`${card.name}: Chọn 1 Spell/Trap để phá hủy! (Tính năng đang phát triển)`)
+      // Destroy 1 Spell/Trap card
+      handleDestroySpellTrap(isPlayerTurn)
+    } else if (cardName.includes('change of heart')) {
+      // Take control of 1 opponent monster for 1 turn
+      handleChangeOfHeart(isPlayerTurn)
     } else {
-      // Generic spell activation
-      alert(`Kích hoạt: ${card.name}\n\n${card.desc.substring(0, 150)}...`)
+      // Try to parse generic effects from description
+      parseGenericEffect(card, isPlayerTurn)
     }
+  }
+
+  const handleDrawEffect = (amount, isPlayerTurn) => {
+    const deck = isPlayerTurn ? playerDeck : aiDeck
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+    
+    if (deck.length >= amount) {
+      const drawnCards = deck.slice(0, amount)
+      setHand([...hand, ...drawnCards])
+      setDeck(deck.slice(amount))
+      alert(`Rút ${amount} lá bài: ${drawnCards.map(c => c.name).join(', ')}`)
+    } else {
+      alert(`Không đủ bài trong deck để rút ${amount} lá!`)
+    }
+  }
+
+  const handleDrawThenDiscard = (drawAmount, discardAmount, isPlayerTurn) => {
+    const deck = isPlayerTurn ? playerDeck : aiDeck
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+    
+    if (deck.length >= drawAmount) {
+      const drawnCards = deck.slice(0, drawAmount)
+      const newHand = [...hand, ...drawnCards]
+      setHand(newHand)
+      setDeck(deck.slice(drawAmount))
+      
+      alert(`Rút ${drawAmount} lá bài, sau đó chọn ${discardAmount} lá để loại bỏ`)
+      
+      // Trigger discard selection
+      setForcedDiscard({ amount: discardAmount, reason: 'spell_effect' })
+      setDiscardingCards(true)
+      setSelectedDiscards([])
+    }
+  }
+
+  const handleDestroyAllMonsters = () => {
+    const playerMonsters = playerField.monsters.filter(m => m !== null)
+    const aiMonsters = aiField.monsters.filter(m => m !== null)
+    
+    // Send all monsters to GY
+    setPlayerGraveyard([...playerGraveyard, ...playerMonsters])
+    setAiGraveyard([...aiGraveyard, ...aiMonsters])
+    
+    // Clear fields
+    setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
+    setAiField({ ...aiField, monsters: [null, null, null, null, null] })
+    
+    alert(`Phá hủy tất cả monsters trên field! (${playerMonsters.length + aiMonsters.length} monsters)`)
+  }
+
+  const handleDestroyOpponentMonsters = (isPlayerTurn) => {
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const opponentGY = isPlayerTurn ? aiGraveyard : playerGraveyard
+    const setOpponentGY = isPlayerTurn ? setAiGraveyard : setPlayerGraveyard
+    
+    const monsters = opponentField.monsters.filter(m => m !== null)
+    
+    if (monsters.length > 0) {
+      setOpponentGY([...opponentGY, ...monsters])
+      setOpponentField({ ...opponentField, monsters: [null, null, null, null, null] })
+      alert(`Phá hủy tất cả monsters của đối thủ! (${monsters.length} monsters)`)
+    } else {
+      alert('Đối thủ không có monster nào trên field!')
+    }
+  }
+
+  const handleMonsterReborn = (isPlayerTurn) => {
+    const playerGY = playerGraveyard.filter(c => c.type.includes('Monster'))
+    const aiGY = aiGraveyard.filter(c => c.type.includes('Monster'))
+    const allMonsters = [...playerGY, ...aiGY]
+    
+    if (allMonsters.length === 0) {
+      alert('Không có monster nào trong Graveyard!')
+      return
+    }
+    
+    // Enter monster selection mode
+    setMonsterRebornMode(true)
+    setAvailableRebornMonsters(allMonsters)
+  }
+
+  const handleSelectRebornMonster = (monster) => {
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const playerGY = playerGraveyard
+    const aiGY = aiGraveyard
+    const setPlayerGY = setPlayerGraveyard
+    const setAiGY = setAiGraveyard
+    
+    // Find empty monster zone
+    const emptyZoneIndex = field.monsters.findIndex(m => m === null)
+    if (emptyZoneIndex === -1) {
+      alert('Không có zone trống!')
+      return
+    }
+    
+    // Remove from appropriate GY
+    if (playerGY.includes(monster)) {
+      setPlayerGY(playerGY.filter(m => m.id !== monster.id))
+    } else {
+      setAiGY(aiGY.filter(m => m.id !== monster.id))
+    }
+    
+    // Summon to field
+    const newMonsters = [...field.monsters]
+    newMonsters[emptyZoneIndex] = {
+      ...monster,
+      faceUp: true,
+      position: 'attack',
+      justSummoned: true
+    }
+    setField({ ...field, monsters: newMonsters })
+    
+    alert(`Monster Reborn: Hồi sinh ${monster.name}!`)
+    
+    // Close modal
+    setMonsterRebornMode(false)
+    setAvailableRebornMonsters([])
+  }
+
+  const handleDeSpell = (isPlayerTurn) => {
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const spells = opponentField.spells.filter((s, i) => s !== null && s.type.includes('Spell'))
+    
+    if (spells.length === 0) {
+      alert('Đối thủ không có Spell card nào trên field!')
+      return
+    }
+    
+    // For now, destroy first spell found
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const opponentGY = isPlayerTurn ? aiGraveyard : playerGraveyard
+    const setOpponentGY = isPlayerTurn ? setAiGraveyard : setPlayerGraveyard
+    
+    const newSpells = [...opponentField.spells]
+    const targetIndex = newSpells.findIndex(s => s !== null && s.type.includes('Spell'))
+    const targetSpell = newSpells[targetIndex]
+    
+    newSpells[targetIndex] = null
+    setOpponentField({ ...opponentField, spells: newSpells })
+    setOpponentGY([...opponentGY, targetSpell])
+    
+    alert(`De-Spell: Phá hủy ${targetSpell.name}!`)
+  }
+
+  const handleFluteOfSummoningDragon = (isPlayerTurn) => {
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const dragons = hand.filter(c => c.race === 'Dragon')
+    
+    if (dragons.length === 0) {
+      alert('Không có Dragon nào trên tay!')
+      return
+    }
+    
+    // Enter dragon selection mode
+    setDragonSummonMode(true)
+    setAvailableDragons(dragons)
+  }
+
+  const handleSelectDragon = (dragon) => {
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+    
+    // Find empty monster zone
+    const emptyZoneIndex = field.monsters.findIndex(m => m === null)
+    if (emptyZoneIndex === -1) {
+      alert('Không có zone trống!')
+      return
+    }
+    
+    // Remove from hand
+    const newHand = hand.filter(c => c.id !== dragon.id)
+    setHand(newHand)
+    
+    // Summon to field
+    const newMonsters = [...field.monsters]
+    newMonsters[emptyZoneIndex] = {
+      ...dragon,
+      faceUp: true,
+      position: 'attack',
+      justSummoned: true
+    }
+    setField({ ...field, monsters: newMonsters })
+    
+    alert(`Flute of Summoning Dragon: Triệu hồi ${dragon.name}!`)
+    setDragonSummonMode(false)
+    setAvailableDragons([])
+  }
+
+  const handleMegamorph = (isPlayerTurn) => {
+    // This would need target selection for equip
+    alert('Megamorph: Chọn 1 monster để trang bị! (Cần implement target selection)')
+  }
+
+  const handleCrushCardVirus = (isPlayerTurn) => {
+    const opponentHand = isPlayerTurn ? aiHand : playerHand
+    const setOpponentHand = isPlayerTurn ? setAiHand : setPlayerHand
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const opponentGY = isPlayerTurn ? aiGraveyard : playerGraveyard
+    const setOpponentGY = isPlayerTurn ? setAiGraveyard : setPlayerGraveyard
+    
+    // Destroy monsters with 1500+ ATK
+    const destroyedFromHand = opponentHand.filter(c => c.type.includes('Monster') && (c.atk || 0) >= 1500)
+    const destroyedFromField = opponentField.monsters.filter(m => m !== null && (m.atk || 0) >= 1500)
+    
+    // Remove from hand
+    const newHand = opponentHand.filter(c => !destroyedFromHand.includes(c))
+    setOpponentHand(newHand)
+    
+    // Remove from field
+    const newMonsters = opponentField.monsters.map(m => {
+      if (m && (m.atk || 0) >= 1500) return null
+      return m
+    })
+    setOpponentField({ ...opponentField, monsters: newMonsters })
+    
+    // Send to GY
+    setOpponentGY([...opponentGY, ...destroyedFromHand, ...destroyedFromField])
+    
+    const totalDestroyed = destroyedFromHand.length + destroyedFromField.length
+    alert(`Crush Card Virus: Phá hủy ${totalDestroyed} monsters có ATK ≥ 1500!`)
+  }
+
+  const handleGiftOfMysticalElf = (isPlayerTurn) => {
+    const allMonsters = [...playerField.monsters, ...aiField.monsters].filter(m => m !== null)
+    const lpGain = allMonsters.length * 300
+    
+    if (isPlayerTurn) {
+      setPlayerLP(playerLP + lpGain)
+    } else {
+      setAiLP(aiLP + lpGain)
+    }
+    
+    alert(`Gift of The Mystical Elf: Hồi phục ${lpGain} LP! (${allMonsters.length} monsters x 300)`)
+  }
+
+  const handleShadowSpell = (isPlayerTurn) => {
+    alert('Shadow Spell: Chọn 1 monster để trang bị! Monster đó sẽ mất 700 ATK. (Cần implement target selection)')
+  }
+
+  const handleNegateAttack = (isPlayerTurn) => {
+    if (!battlePhase) {
+      alert('Negate Attack chỉ có thể kích hoạt trong Battle Phase!')
+      return
+    }
+    
+    // End battle phase and reset attacker
+    setBattlePhase(false)
+    setSelectedAttacker(null)
+    
+    alert('Negate Attack: Vô hiệu hóa tấn công và kết thúc Battle Phase!')
+  }
+
+  const handleDarkMagicCurtain = (isPlayerTurn) => {
+    // Pay half LP
+    if (isPlayerTurn) {
+      const lpCost = Math.floor(playerLP / 2)
+      setPlayerLP(playerLP - lpCost)
+      
+      // Check if player has Dark Magician in deck
+      const darkMagician = player.deck.main.find(c => c.name.includes('Dark Magician'))
+      if (darkMagician) {
+        // Special Summon Dark Magician
+        const field = playerField
+        const setField = setPlayerField
+        const emptyZoneIndex = field.monsters.findIndex(m => m === null)
+        
+        if (emptyZoneIndex !== -1) {
+          const newMonsters = [...field.monsters]
+          newMonsters[emptyZoneIndex] = {
+            ...darkMagician,
+            faceUp: true,
+            position: 'attack',
+            justSummoned: true
+          }
+          setField({ ...field, monsters: newMonsters })
+          alert(`Dark Magic Curtain: Trả ${lpCost} LP, triệu hồi ${darkMagician.name}!`)
+        } else {
+          alert('Không có zone trống!')
+        }
+      } else {
+        alert('Không có Dark Magician trong deck!')
+      }
+    } else {
+      // Similar for AI
+      alert('Dark Magic Curtain: AI sử dụng (cần implement)')
+    }
+  }
+
+  const handleDedicationThroughLightAndDarkness = (isPlayerTurn) => {
+    const field = isPlayerTurn ? playerField : aiField
+    const darkMagician = field.monsters.find(m => m && m.name.includes('Dark Magician'))
+    
+    if (!darkMagician) {
+      alert('Cần có Dark Magician trên field để hiến tế!')
+      return
+    }
+    
+    // Check if player has Dark Magician of Chaos in deck
+    const darkMagicianOfChaos = (isPlayerTurn ? player.deck.main : ai.deck.main).find(c => c.name.includes('Dark Magician of Chaos'))
+    if (darkMagicianOfChaos) {
+      // Tribute Dark Magician
+      const setField = isPlayerTurn ? setPlayerField : setAiField
+      const graveyard = isPlayerTurn ? playerGraveyard : aiGraveyard
+      const setGraveyard = isPlayerTurn ? setPlayerGraveyard : setAiGraveyard
+      
+      const monsterIndex = field.monsters.findIndex(m => m === darkMagician)
+      const newMonsters = [...field.monsters]
+      newMonsters[monsterIndex] = null
+      setField({ ...field, monsters: newMonsters })
+      setGraveyard([...graveyard, darkMagician])
+      
+      // Special Summon Dark Magician of Chaos
+      const emptyZoneIndex = newMonsters.findIndex(m => m === null)
+      if (emptyZoneIndex !== -1) {
+        newMonsters[emptyZoneIndex] = {
+          ...darkMagicianOfChaos,
+          faceUp: true,
+          position: 'attack',
+          justSummoned: true
+        }
+        setField({ ...field, monsters: newMonsters })
+        alert(`Dedication through Light and Darkness: Hiến tế Dark Magician, triệu hồi ${darkMagicianOfChaos.name}!`)
+      }
+    } else {
+      alert('Không có Dark Magician of Chaos trong deck!')
+    }
+  }
+
+  const handleBookOfSecretArts = (isPlayerTurn) => {
+    alert('Book of Secret Arts: Chọn 1 Spellcaster để trang bị! Monster đó tăng 300 ATK/DEF. (Cần implement target selection)')
+  }
+
+  const handleBrainControl = (isPlayerTurn) => {
+    alert('Brain Control: Chọn 1 monster của đối thủ để điều khiển trong turn này! (Cần implement control system)')
+  }
+
+  const handleHornOfTheUnicorn = (isPlayerTurn) => {
+    alert('Horn of the Unicorn: Chọn 1 monster để trang bị! Monster đó tăng 700 ATK/DEF. (Cần implement target selection)')
+  }
+
+  const handleMysticBox = (isPlayerTurn) => {
+    alert('Mystic Box: Chọn 1 monster để phá hủy, sau đó chọn 1 monster khác để chuyển quyền điều khiển! (Cần implement target selection)')
+  }
+
+  const handleEyeOfTimaeus = (isPlayerTurn) => {
+    const field = isPlayerTurn ? playerField : aiField
+    const darkMagician = field.monsters.find(m => m && m.name.includes('Dark Magician'))
+    
+    if (!darkMagician) {
+      alert('Cần có Dark Magician trên field để Fusion Summon!')
+      return
+    }
+    
+    // Check for Dark Magician fusions in Extra Deck
+    const extraDeck = isPlayerTurn ? player.deck.extra : ai.deck.extra
+    const darkMagicianFusions = extraDeck.filter(c => c.name.includes('Dark Magician') && c.type.includes('Fusion'))
+    
+    if (darkMagicianFusions.length === 0) {
+      alert('Không có Dark Magician Fusion Monster trong Extra Deck!')
+      return
+    }
+    
+    // Enter fusion selection mode
+    setFusionMode(true)
+    setAvailableFusions(darkMagicianFusions.map(m => ({ monster: m, requirements: [] })))
+    setSelectedFusionMaterials([{
+      id: 'field-darkmagician',
+      card: darkMagician,
+      source: 'field',
+      index: field.monsters.findIndex(m => m === darkMagician)
+    }])
+    setSelectedFusionMonster(null)
+  }
+
+  const handleMultiply = (isPlayerTurn) => {
+    const field = isPlayerTurn ? playerField : aiField
+    const kuriboh = field.monsters.find(m => m && m.name.includes('Kuriboh'))
+    
+    if (!kuriboh) {
+      alert('Cần có Kuriboh trên field!')
+      return
+    }
+    
+    // Create 2 Kuriboh tokens
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const newMonsters = [...field.monsters]
+    let tokensCreated = 0
+    
+    for (let i = 0; i < newMonsters.length && tokensCreated < 2; i++) {
+      if (newMonsters[i] === null) {
+        newMonsters[i] = {
+          name: 'Kuriboh Token',
+          type: 'Token',
+          atk: 300,
+          def: 200,
+          faceUp: true,
+          position: 'defense',
+          isToken: true
+        }
+        tokensCreated++
+      }
+    }
+    
+    setField({ ...field, monsters: newMonsters })
+    alert(`Multiply: Tạo ${tokensCreated} Kuriboh Token!`)
+  }
+
+  const handleLightforceSword = (isPlayerTurn) => {
+    const opponentHand = isPlayerTurn ? aiHand : playerHand
+    
+    if (opponentHand.length === 0) {
+      alert('Đối thủ không có bài trên tay!')
+      return
+    }
+    
+    // Randomly banish 1 card
+    const randomIndex = Math.floor(Math.random() * opponentHand.length)
+    const banishedCard = opponentHand[randomIndex]
+    const setOpponentHand = isPlayerTurn ? setAiHand : setPlayerHand
+    
+    const newHand = opponentHand.filter((_, i) => i !== randomIndex)
+    setOpponentHand(newHand)
+    
+    alert(`Lightforce Sword: Loại bỏ ngẫu nhiên ${banishedCard.name} từ tay đối thủ!`)
+  }
+
+  const handleMagicCylinder = (isPlayerTurn) => {
+    if (!battlePhase || !selectedAttacker) {
+      alert('Magic Cylinder chỉ có thể kích hoạt khi bị tấn công!')
+      return
+    }
+    
+    const attacker = selectedAttacker.card
+    const damage = attacker.atk || 0
+    
+    // Inflict damage to attacker's owner
+    if (currentTurn === 'player') {
+      setPlayerLP(playerLP - damage)
+    } else {
+      setAiLP(aiLP - damage)
+    }
+    
+    // End battle
+    setBattlePhase(false)
+    setSelectedAttacker(null)
+    
+    alert(`Magic Cylinder: Phản lại ${damage} damage!`)
+  }
+
+  const handleMagicalHats = (isPlayerTurn) => {
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    
+    // Create 2 token hats
+    const newSpells = [...field.spells]
+    let hatsCreated = 0
+    
+    for (let i = 0; i < newSpells.length && hatsCreated < 2; i++) {
+      if (newSpells[i] === null) {
+        newSpells[i] = {
+          name: 'Magical Hat Token',
+          type: 'Token',
+          faceUp: false,
+          isToken: true
+        }
+        hatsCreated++
+      }
+    }
+    
+    setField({ ...field, spells: newSpells })
+    alert(`Magical Hats: Tạo ${hatsCreated} Magical Hat Token để bảo vệ monsters!`)
+  }
+
+  const handleMirrorForce = (isPlayerTurn) => {
+    if (!battlePhase) {
+      alert('Mirror Force chỉ có thể kích hoạt trong Battle Phase!')
+      return
+    }
+    
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const opponentGY = isPlayerTurn ? aiGraveyard : playerGraveyard
+    const setOpponentGY = isPlayerTurn ? setAiGraveyard : setPlayerGraveyard
+    
+    // Destroy all Attack Position monsters
+    const attackMonsters = opponentField.monsters.filter((m, i) => m !== null && m.position === 'attack')
+    
+    if (attackMonsters.length === 0) {
+      alert('Đối thủ không có monster ở Attack Position!')
+      return
+    }
+    
+    const newMonsters = opponentField.monsters.map(m => {
+      if (m && m.position === 'attack') return null
+      return m
+    })
+    
+    setOpponentField({ ...opponentField, monsters: newMonsters })
+    setOpponentGY([...opponentGY, ...attackMonsters])
+    
+    alert(`Mirror Force: Phá hủy ${attackMonsters.length} Attack Position monsters!`)
+    setBattlePhase(false)
+    setSelectedAttacker(null)
+  }
+
+  const handleSevenToolsOfTheBandit = (isPlayerTurn) => {
+    alert('Seven Tools of the Bandit: Vô hiệu hóa Trap card! (Cần implement chain system)')
+  }
+
+  const handleSpellbindingCircle = (isPlayerTurn) => {
+    alert('Spellbinding Circle: Chọn 1 monster để trang bị! Monster đó mất 700 ATK và không thể tấn công. (Cần implement target selection)')
+  }
+
+  const handleTimeSeal = (isPlayerTurn) => {
+    alert('Time Seal: Đối thủ bỏ qua Draw Phase tiếp theo! (Cần implement turn counter)')
+  }
+
+  const handleChainDestruction = (isPlayerTurn) => {
+    alert('Chain Destruction: Khi monster bị phá hủy, phá hủy tất cả copies trong hand/deck! (Cần implement chain system)')
+  }
+
+  const handleDestroySpellTrap = (isPlayerTurn) => {
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const spellTraps = opponentField.spells.filter(s => s !== null)
+    
+    if (spellTraps.length === 0) {
+      alert('Đối thủ không có Spell/Trap nào trên field!')
+      return
+    }
+    
+    alert(`MST: Chọn 1 Spell/Trap để phá hủy!\nCó ${spellTraps.length} cards: ${spellTraps.map(s => s.name).join(', ')}`)
+  }
+
+  const handleFissure = (isPlayerTurn) => {
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const opponentGY = isPlayerTurn ? aiGraveyard : playerGraveyard
+    const setOpponentGY = isPlayerTurn ? setAiGraveyard : setPlayerGraveyard
+    
+    const faceUpMonsters = opponentField.monsters.filter(m => m !== null && m.faceUp)
+    
+    if (faceUpMonsters.length === 0) {
+      alert('Đối thủ không có monster ngửa nào!')
+      return
+    }
+    
+    // Find monster with lowest ATK
+    const lowestATK = Math.min(...faceUpMonsters.map(m => m.atk || 0))
+    const targetMonster = faceUpMonsters.find(m => (m.atk || 0) === lowestATK)
+    const targetIndex = opponentField.monsters.findIndex(m => m === targetMonster)
+    
+    // Destroy the monster
+    const newMonsters = [...opponentField.monsters]
+    newMonsters[targetIndex] = null
+    setOpponentField({ ...opponentField, monsters: newMonsters })
+    setOpponentGY([...opponentGY, targetMonster])
+    
+    alert(`Fissure: Phá hủy ${targetMonster.name} (ATK: ${targetMonster.atk})`)
+  }
+
+  const handleSwordsOfRevealingLight = (isPlayerTurn) => {
+    // This would need a turn counter system
+    alert('Swords of Revealing Light: Đối thủ không thể tấn công trong 3 turn! (Cần implement turn counter)')
+  }
+
+  const handleChangeOfHeart = (isPlayerTurn) => {
+    alert('Change of Heart: Chọn 1 monster của đối thủ để điều khiển trong turn này! (Cần implement control system)')
+  }
+
+  const handleHeavyStorm = () => {
+    const playerSpells = playerField.spells.filter(s => s !== null)
+    const aiSpells = aiField.spells.filter(s => s !== null)
+    
+    // Send all spells/traps to GY
+    setPlayerGraveyard([...playerGraveyard, ...playerSpells])
+    setAiGraveyard([...aiGraveyard, ...aiSpells])
+    
+    // Clear spell/trap zones
+    setPlayerField({ ...playerField, spells: [null, null, null, null, null] })
+    setAiField({ ...aiField, spells: [null, null, null, null, null] })
+    
+    alert(`Heavy Storm: Phá hủy tất cả Spell/Trap trên field! (${playerSpells.length + aiSpells.length} cards)`)
+  }
+
+  const parseGenericEffect = (card, isPlayerTurn) => {
+    const effectText = card.desc.toLowerCase()
+    
+    // Try to parse common effect patterns
+    if (effectText.includes('draw') && effectText.includes('card')) {
+      const drawMatch = effectText.match(/draw (\d+) card/i)
+      if (drawMatch) {
+        const amount = parseInt(drawMatch[1])
+        handleDrawEffect(amount, isPlayerTurn)
+        return
+      }
+    }
+    
+    if (effectText.includes('destroy all monsters')) {
+      handleDestroyAllMonsters()
+      return
+    }
+    
+    if (effectText.includes('destroy') && effectText.includes('spell') && effectText.includes('trap')) {
+      handleDestroySpellTrap(isPlayerTurn)
+      return
+    }
+    
+    if (effectText.includes('fusion summon') || effectText.includes('polymerization')) {
+      handlePolymerization(isPlayerTurn)
+      return
+    }
+    
+    // Fallback: show effect description
+    alert(`Kích hoạt: ${card.name}\n\n${card.desc.substring(0, 200)}${card.desc.length > 200 ? '...' : ''}`)
+  }
+
+  const handlePolymerization = (isPlayerTurn) => {
+    const extraDeck = isPlayerTurn ? player.deck.extra : ai.deck.extra
+    const field = isPlayerTurn ? playerField : aiField
+    const hand = isPlayerTurn ? playerHand : aiHand
+    
+    // Get all monsters from hand and field
+    const handMonsters = hand.filter(c => c.type.includes('Monster'))
+    const fieldMonsters = field.monsters.filter(m => m !== null)
+    const allMaterials = [...handMonsters, ...fieldMonsters]
+    
+    if (allMaterials.length < 2) {
+      alert('Cần ít nhất 2 monsters để Fusion Summon!')
+      return
+    }
+    
+    // Find possible fusions
+    const possibleFusions = findPossibleFusions(allMaterials, extraDeck)
+    
+    if (possibleFusions.length === 0) {
+      alert('Không có Fusion Monster nào có thể triệu hồi với materials hiện tại!')
+      return
+    }
+    
+    // Enter fusion mode
+    setFusionMode(true)
+    setAvailableFusions(possibleFusions)
+    setSelectedFusionMaterials([])
+    setSelectedFusionMonster(null)
+  }
+
+  const findPossibleFusions = (materials, extraDeck) => {
+    const possibleFusions = []
+    
+    extraDeck.forEach(fusionMonster => {
+      if (fusionMonster.type.includes('Fusion')) {
+        const requirements = parseFusionRequirements(fusionMonster.desc)
+        if (canFusionSummon(materials, requirements)) {
+          possibleFusions.push({
+            monster: fusionMonster,
+            requirements: requirements
+          })
+        }
+      }
+    })
+    
+    return possibleFusions
+  }
+
+  const parseFusionRequirements = (description) => {
+    // Parse fusion requirements from card description
+    // This is simplified - real implementation would need comprehensive parsing
+    
+    if (description.includes('Blue-Eyes White Dragon') && description.includes('Red-Eyes Black Dragon')) {
+      return [
+        { name: 'Blue-Eyes White Dragon', type: 'specific' },
+        { name: 'Red-Eyes Black Dragon', type: 'specific' }
+      ]
+    }
+    
+    if (description.includes('Elemental HERO') && description.includes('2 "Elemental HERO"')) {
+      return [
+        { archetype: 'Elemental HERO', count: 2, type: 'archetype' }
+      ]
+    }
+    
+    if (description.includes('Warrior') && description.includes('Spellcaster')) {
+      return [
+        { race: 'Warrior', type: 'race' },
+        { race: 'Spellcaster', type: 'race' }
+      ]
+    }
+    
+    // Generic 2 monsters
+    return [
+      { count: 2, type: 'generic' }
+    ]
+  }
+
+  const canFusionSummon = (materials, requirements) => {
+    // Check if materials can satisfy fusion requirements
+    
+    for (const req of requirements) {
+      if (req.type === 'specific') {
+        const hasRequired = materials.some(m => m.name === req.name)
+        if (!hasRequired) return false
+      } else if (req.type === 'archetype') {
+        const archetypeCount = materials.filter(m => m.name.includes(req.archetype)).length
+        if (archetypeCount < req.count) return false
+      } else if (req.type === 'race') {
+        const hasRace = materials.some(m => m.race === req.race)
+        if (!hasRace) return false
+      } else if (req.type === 'generic') {
+        if (materials.length < req.count) return false
+      }
+    }
+    
+    return true
+  }
+
+  const handleFusionMaterialSelect = (material, source, index) => {
+    const materialId = `${source}-${index}`
+    const isSelected = selectedFusionMaterials.some(m => m.id === materialId)
+    
+    if (isSelected) {
+      setSelectedFusionMaterials(selectedFusionMaterials.filter(m => m.id !== materialId))
+    } else {
+      setSelectedFusionMaterials([...selectedFusionMaterials, {
+        id: materialId,
+        card: material,
+        source: source, // 'hand' or 'field'
+        index: index
+      }])
+    }
+  }
+
+  const handleSelectFusionMonster = (fusion) => {
+    setSelectedFusionMonster(fusion)
+  }
+
+  const handleConfirmFusion = () => {
+    if (!selectedFusionMonster || selectedFusionMaterials.length < 2) {
+      alert('Vui lòng chọn Fusion Monster và ít nhất 2 materials!')
+      return
+    }
+    
+    const isPlayerTurn = currentTurn === 'player'
+    const field = isPlayerTurn ? playerField : aiField
+    const setField = isPlayerTurn ? setPlayerField : setAiField
+    const hand = isPlayerTurn ? playerHand : aiHand
+    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
+    const graveyard = isPlayerTurn ? playerGraveyard : aiGraveyard
+    const setGraveyard = isPlayerTurn ? setPlayerGraveyard : setAiGraveyard
+    
+    // Send materials to GY
+    const materialsToGY = selectedFusionMaterials.map(m => m.card)
+    setGraveyard([...graveyard, ...materialsToGY])
+    
+    // Remove materials from hand and field
+    const newHand = [...hand]
+    const newField = { ...field }
+    
+    selectedFusionMaterials.forEach(material => {
+      if (material.source === 'hand') {
+        const handIndex = newHand.findIndex(c => c.id === material.card.id)
+        if (handIndex !== -1) {
+          newHand.splice(handIndex, 1)
+        }
+      } else if (material.source === 'field') {
+        newField.monsters[material.index] = null
+      }
+    })
+    
+    setHand(newHand)
+    
+    // Find empty monster zone for fusion
+    const emptyZoneIndex = newField.monsters.findIndex(m => m === null)
+    if (emptyZoneIndex === -1) {
+      alert('Không có zone trống để triệu hồi Fusion Monster!')
+      return
+    }
+    
+    // Summon fusion monster
+    newField.monsters[emptyZoneIndex] = {
+      ...selectedFusionMonster.monster,
+      faceUp: true,
+      position: 'attack',
+      justSummoned: true
+    }
+    
+    setField(newField)
+    
+    // Show fusion animation
+    alert(`🌟 FUSION SUMMON! 🌟\n${selectedFusionMonster.monster.name}\nATK: ${selectedFusionMonster.monster.atk} / DEF: ${selectedFusionMonster.monster.def}`)
+    
+    // Reset fusion mode
+    setFusionMode(false)
+    setSelectedFusionMaterials([])
+    setAvailableFusions([])
+    setSelectedFusionMonster(null)
+  }
+
+  const handleCancelFusion = () => {
+    setFusionMode(false)
+    setSelectedFusionMaterials([])
+    setAvailableFusions([])
+    setSelectedFusionMonster(null)
   }
 
   const handleDragStart = (card, index) => {
@@ -736,6 +1690,9 @@ function Duel() {
       // Remove from hand
       const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
       setHand(newHand)
+      
+      // Mark normal summon as used
+      setNormalSummonUsed(true)
 
       // Remove animation and shake
       setTimeout(() => {
@@ -940,30 +1897,6 @@ function Duel() {
   const closeGraveyard = () => {
     setShowGraveyard(false)
     setGraveyardOwner(null)
-  }
-
-  const handleDrawCard = () => {
-    const isPlayerTurn = currentTurn === 'player'
-    const deck = isPlayerTurn ? playerDeck : aiDeck
-    const hand = isPlayerTurn ? playerHand : aiHand
-    const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
-    const setHand = isPlayerTurn ? setPlayerHand : setAiHand
-
-    if (deck.length === 0) {
-      // Deck out - lose the game
-      setGameOver(true)
-      setWinner(isPlayerTurn ? 'ai' : 'player')
-      alert(`${isPlayerTurn ? player.name : ai.name} không còn bài để rút! Deck Out!`)
-      return
-    }
-
-    // Draw card
-    const drawnCard = deck[0]
-    setHand([...hand, drawnCard])
-    setDeck(deck.slice(1))
-    
-    // Show notification
-    alert(`Rút bài: ${drawnCard.name}`)
   }
 
   const animateLP = (target, damage) => {
@@ -1231,11 +2164,17 @@ function Duel() {
               >
                 {card ? (
                   card.faceUp ? (
-                    <img 
-                      src={card.image_url} 
-                      alt={card.name}
-                      className={`field-card ${card.position}`}
-                    />
+                    <div className="monster-card-container">
+                      <img 
+                        src={card.image_url} 
+                        alt={card.name}
+                        className={`field-card ${card.position}`}
+                      />
+                      <div className="atk-def-overlay">
+                        <div className="atk-value">{card.atk}</div>
+                        <div className="def-value">{card.def}</div>
+                      </div>
+                    </div>
                   ) : (
                     <div className="card-back"></div>
                   )
@@ -1251,9 +2190,11 @@ function Duel() {
             {(currentTurn === 'player' ? playerField : aiField).monsters.map((card, i) => (
               <div 
                 key={i} 
-                className={`zone monster-zone ${selectedAttacker?.index === i ? 'selected-attacker' : ''} ${selectingZone && selectedHandCard?.card.type.includes('Monster') ? 'zone-selectable' : ''}`}
+                className={`zone monster-zone ${selectedAttacker?.index === i ? 'selected-attacker' : ''} ${selectingZone && selectedHandCard?.card.type.includes('Monster') ? 'zone-selectable' : ''} ${fusionMode && card ? 'fusion-material-selectable' : ''} ${fusionMode && selectedFusionMaterials.some(m => m.id === `field-${i}`) ? 'selected-fusion-material' : ''}`}
                 onClick={() => {
-                  if (selectingZone && !card && selectedHandCard?.card.type.includes('Monster')) {
+                  if (fusionMode && card) {
+                    handleFusionMaterialSelect(card, 'field', i)
+                  } else if (selectingZone && !card && selectedHandCard?.card.type.includes('Monster')) {
                     handleZoneSelect(i, 'monster')
                   } else if (card) {
                     handleCardClick(card, 'monster', i, true)
@@ -1261,15 +2202,21 @@ function Duel() {
                 }}
                 onMouseEnter={() => card && setHoveredCard(card)}
                 onMouseLeave={() => setHoveredCard(null)}
-                onContextMenu={(e) => !selectingZone && card && handleRightClick(e, card, 'monster', i, true)}
+                onContextMenu={(e) => !selectingZone && !fusionMode && card && handleRightClick(e, card, 'monster', i, true)}
               >
                 {card ? (
                   card.faceUp ? (
-                    <img 
-                      src={card.image_url} 
-                      alt={card.name}
-                      className={`field-card ${card.position} ${card.justSummoned ? 'just-summoned' : ''}`}
-                    />
+                    <div className="monster-card-container">
+                      <img 
+                        src={card.image_url} 
+                        alt={card.name}
+                        className={`field-card ${card.position} ${card.justSummoned ? 'just-summoned' : ''}`}
+                      />
+                      <div className="atk-def-overlay">
+                        <div className="atk-value">{card.atk}</div>
+                        <div className="def-value">{card.def}</div>
+                      </div>
+                    </div>
                   ) : (
                     <div className="card-back"></div>
                   )
@@ -1319,7 +2266,7 @@ function Duel() {
             <div className="card-back"></div>
             <div className="zone-label">Extra</div>
           </div>
-          <div className="zone deck-zone" onClick={handleDrawCard}>
+          <div className="zone deck-zone">
             <div className="card-back"></div>
             <div className="zone-label">Deck</div>
             {(currentTurn === 'player' ? playerDeck : aiDeck).length > 0 && (
@@ -1360,20 +2307,28 @@ function Duel() {
         {(currentTurn === 'player' ? playerHand : aiHand).map((card, i) => (
           <div 
             key={i} 
-            className={`hand-card ${selectedHandCard?.index === i ? 'selected-hand-card' : ''}`}
+            className={`hand-card ${selectedHandCard?.index === i ? 'selected-hand-card' : ''} ${fusionMode && card.type.includes('Monster') ? 'fusion-material-selectable' : ''} ${fusionMode && selectedFusionMaterials.some(m => m.id === `hand-${i}`) ? 'selected-fusion-material' : ''}`}
             onMouseEnter={() => setHoveredCard(card)}
             onMouseLeave={() => setHoveredCard(null)}
-            onClick={() => handleHandCardClick(card, i)}
+            onClick={() => {
+              if (fusionMode && card.type.includes('Monster')) {
+                handleFusionMaterialSelect(card, 'hand', i)
+              } else {
+                handleHandCardClick(card, i)
+              }
+            }}
             onContextMenu={(e) => {
-              e.preventDefault()
-              setContextMenu({
-                x: e.clientX,
-                y: e.clientY,
-                card,
-                type: 'hand',
-                index: i,
-                isCurrentPlayer: true
-              })
+              if (!fusionMode) {
+                e.preventDefault()
+                setContextMenu({
+                  x: e.clientX,
+                  y: e.clientY,
+                  card,
+                  type: 'hand',
+                  index: i,
+                  isCurrentPlayer: true
+                })
+              }
             }}
           >
             <img src={card.image_url} alt={card.name} />
@@ -1482,15 +2437,17 @@ function Duel() {
               )}
               {(selectedHandCard.card.type.includes('Spell') || selectedHandCard.card.type.includes('Trap')) && (
                 <>
-                  <button 
-                    className="summon-option-btn activate"
-                    onClick={() => {
-                      setSummonMode('activate')
-                      setSelectingZone(true)
-                    }}
-                  >
-                    ✨ Kích hoạt
-                  </button>
+                  {selectedHandCard.card.type.includes('Spell') && (
+                    <button 
+                      className="summon-option-btn activate"
+                      onClick={() => {
+                        setSummonMode('activate')
+                        setSelectingZone(true)
+                      }}
+                    >
+                      ✨ Kích hoạt
+                    </button>
+                  )}
                   <button 
                     className="summon-option-btn set"
                     onClick={() => handleSummonOption('set')}
@@ -1745,13 +2702,22 @@ function Duel() {
       )}
 
       {/* Discard Cards Modal */}
-      {discardingCards && (
+      {(discardingCards || forcedDiscard) && (
         <div className="discard-modal">
           <div className="discard-content">
             <div className="discard-header">
-              <h2>⚠️ Giới hạn bài trên tay</h2>
-              <p>Bạn có {(currentTurn === 'player' ? playerHand : aiHand).length} lá bài. Giới hạn là {handLimit} lá.</p>
-              <p className="discard-instruction">Chọn {(currentTurn === 'player' ? playerHand : aiHand).length - handLimit} lá để loại bỏ vào Graveyard</p>
+              <h2>⚠️ {forcedDiscard ? 'Hiệu ứng Spell' : 'Giới hạn bài trên tay'}</h2>
+              {forcedDiscard ? (
+                <>
+                  <p>Hiệu ứng spell yêu cầu loại bỏ {forcedDiscard.amount} lá bài</p>
+                  <p className="discard-instruction">Chọn {forcedDiscard.amount} lá để loại bỏ vào Graveyard</p>
+                </>
+              ) : (
+                <>
+                  <p>Bạn có {(currentTurn === 'player' ? playerHand : aiHand).length} lá bài. Giới hạn là {handLimit} lá.</p>
+                  <p className="discard-instruction">Chọn {(currentTurn === 'player' ? playerHand : aiHand).length - handLimit} lá để loại bỏ vào Graveyard</p>
+                </>
+              )}
             </div>
 
             <div className="discard-cards-grid">
@@ -1769,16 +2735,84 @@ function Duel() {
             </div>
 
             <div className="discard-status">
-              <p>Đã chọn: {selectedDiscards.length} / {(currentTurn === 'player' ? playerHand : aiHand).length - handLimit}</p>
+              <p>Đã chọn: {selectedDiscards.length} / {forcedDiscard ? forcedDiscard.amount : ((currentTurn === 'player' ? playerHand : aiHand).length - handLimit)}</p>
             </div>
 
             <div className="discard-buttons">
               <button 
                 className="discard-btn confirm"
                 onClick={handleConfirmDiscard}
-                disabled={selectedDiscards.length !== ((currentTurn === 'player' ? playerHand : aiHand).length - handLimit)}
+                disabled={selectedDiscards.length !== (forcedDiscard ? forcedDiscard.amount : ((currentTurn === 'player' ? playerHand : aiHand).length - handLimit))}
               >
                 ✓ Xác nhận loại bỏ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fusion Summon Modal */}
+      {fusionMode && (
+        <div className="fusion-modal">
+          <div className="fusion-content">
+            <div className="fusion-header">
+              <h2>🌟 FUSION SUMMON 🌟</h2>
+              <p>Chọn materials và Fusion Monster để triệu hồi</p>
+            </div>
+
+            <div className="fusion-sections">
+              {/* Available Fusion Monsters */}
+              <div className="fusion-monsters-section">
+                <h3>Fusion Monsters có thể triệu hồi:</h3>
+                <div className="fusion-monsters-grid">
+                  {availableFusions.map((fusion, i) => (
+                    <div 
+                      key={i}
+                      className={`fusion-monster-card ${selectedFusionMonster?.monster.id === fusion.monster.id ? 'selected' : ''}`}
+                      onClick={() => handleSelectFusionMonster(fusion)}
+                    >
+                      <img src={fusion.monster.image_url} alt={fusion.monster.name} />
+                      <div className="fusion-monster-name">{fusion.monster.name}</div>
+                      <div className="fusion-monster-stats">ATK: {fusion.monster.atk} / DEF: {fusion.monster.def}</div>
+                      {selectedFusionMonster?.monster.id === fusion.monster.id && <div className="fusion-selected-badge">✓</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Selected Materials */}
+              <div className="fusion-materials-section">
+                <h3>Materials đã chọn: ({selectedFusionMaterials.length})</h3>
+                <div className="selected-materials-display">
+                  {selectedFusionMaterials.map((material, i) => (
+                    <div key={i} className="selected-material">
+                      <img src={material.card.image_url} alt={material.card.name} />
+                      <div className="material-name">{material.card.name}</div>
+                      <div className="material-source">({material.source === 'hand' ? 'Hand' : 'Field'})</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="fusion-instructions">
+              <p>💡 Click vào monsters trên hand/field để chọn materials</p>
+              <p>💡 Click vào Fusion Monster để chọn</p>
+            </div>
+
+            <div className="fusion-buttons">
+              <button 
+                className="fusion-btn confirm"
+                onClick={handleConfirmFusion}
+                disabled={!selectedFusionMonster || selectedFusionMaterials.length < 2}
+              >
+                🌟 Fusion Summon
+              </button>
+              <button 
+                className="fusion-btn cancel"
+                onClick={handleCancelFusion}
+              >
+                ❌ Hủy
               </button>
             </div>
           </div>
