@@ -58,14 +58,7 @@ function Home() {
         <div className="hero-content">
           <h1>Yu-Gi-Oh! Duel Arena</h1>
           <p>Tra cứu bài, đọc hướng dẫn, và thách đấu ngay!</p>
-          <div className="hero-buttons">
-            <button className="hero-btn primary" onClick={() => navigate('/game')}>
-              ⚔️ Bắt đầu đấu
-            </button>
-            <button className="hero-btn secondary" onClick={() => navigate('/cards')}>
-              🔍 Tìm kiếm bài
-            </button>
-          </div>
+
         </div>
       </div>
 
