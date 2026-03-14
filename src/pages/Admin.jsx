@@ -101,8 +101,14 @@ export default function Admin() {
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyArticle)
   const [saving, setSaving] = useState(false)
-  const [filterCat, setFilterCat] = useState('all')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+
+  // Filters
+  const [filterTitle, setFilterTitle] = useState('')
+  const [filterCat, setFilterCat] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all') // 'all' | 'published' | 'hidden'
+  const [filterDateFrom, setFilterDateFrom] = useState('')
+  const [filterDateTo, setFilterDateTo] = useState('')
 
   // Categories - normalize từ string hoặc object
   const rawCats = JSON.parse(localStorage.getItem('admin_categories') || 'null') || CATEGORIES_DEFAULT
@@ -238,8 +244,18 @@ export default function Admin() {
     showToast('✅ Đã lưu cài đặt')
   }
 
-  const filtered = filterCat === 'all' ? articles : articles.filter(a => a.category === filterCat)
+  const filtered = articles.filter(a => {
+    if (filterCat !== 'all' && a.category !== filterCat) return false
+    if (filterStatus === 'published' && !a.published) return false
+    if (filterStatus === 'hidden' && a.published) return false
+    if (filterTitle && !a.title.toLowerCase().includes(filterTitle.toLowerCase())) return false
+    if (filterDateFrom && new Date(a.createdAt) < new Date(filterDateFrom)) return false
+    if (filterDateTo && new Date(a.createdAt) > new Date(filterDateTo + 'T23:59:59')) return false
+    return true
+  })
   const catNames = categories.map(c => typeof c === 'string' ? c : c.name)
+  const hasActiveFilter = filterTitle || filterCat !== 'all' || filterStatus !== 'all' || filterDateFrom || filterDateTo
+  const resetFilters = () => { setFilterTitle(''); setFilterCat('all'); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo('') }
 
   return (
     <div className="admin-page">
@@ -313,15 +329,51 @@ export default function Admin() {
               </button>
             </div>
 
-            <div className="admin-filters">
-              <button className={`filter-btn ${filterCat === 'all' ? 'active' : ''}`} onClick={() => setFilterCat('all')}>
-                Tất cả ({articles.length})
-              </button>
-              {catNames.map(cat => (
-                <button key={cat} className={`filter-btn ${filterCat === cat ? 'active' : ''}`} onClick={() => setFilterCat(cat)}>
-                  {cat} ({articles.filter(a => a.category === cat).length})
-                </button>
-              ))}
+            <div className="article-filters">
+              {/* Row 1: search + status + reset */}
+              <div className="af-row">
+                <div className="af-search">
+                  <span className="af-search-icon">🔍</span>
+                  <input
+                    className="af-input"
+                    placeholder="Tìm theo tiêu đề..."
+                    value={filterTitle}
+                    onChange={e => setFilterTitle(e.target.value)}
+                  />
+                  {filterTitle && <button className="af-clear" onClick={() => setFilterTitle('')}>✕</button>}
+                </div>
+
+                <select className="af-select" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+                  <option value="all">Tất cả trạng thái</option>
+                  <option value="published">✅ Đã đăng</option>
+                  <option value="hidden">🔒 Đang ẩn</option>
+                </select>
+
+                <select className="af-select" value={filterCat} onChange={e => setFilterCat(e.target.value)}>
+                  <option value="all">Tất cả danh mục</option>
+                  {catNames.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+
+                <div className="af-date-group">
+                  <input type="date" className="af-date" value={filterDateFrom}
+                    onChange={e => setFilterDateFrom(e.target.value)} title="Từ ngày" />
+                  <span className="af-date-sep">→</span>
+                  <input type="date" className="af-date" value={filterDateTo}
+                    onChange={e => setFilterDateTo(e.target.value)} title="Đến ngày" />
+                </div>
+
+                {hasActiveFilter && (
+                  <button className="af-reset" onClick={resetFilters}>✕ Xóa filter</button>
+                )}
+              </div>
+
+              {/* Row 2: result count */}
+              <div className="af-result">
+                {hasActiveFilter
+                  ? <span>Tìm thấy <strong>{filtered.length}</strong> / {articles.length} bài viết</span>
+                  : <span>Tổng <strong>{articles.length}</strong> bài viết</span>
+                }
+              </div>
             </div>
 
             {loading ? (
