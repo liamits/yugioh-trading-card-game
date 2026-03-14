@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import 'react-quill/dist/quill.snow.css'
 import './Article.css'
 
 export default function Article() {
@@ -113,11 +114,10 @@ export default function Article() {
 
             {/* Content */}
             {article.content ? (
-              <div className="art-content">
-                {article.content.split('\n').map((para, i) =>
-                  para.trim() ? <p key={i}>{para}</p> : <br key={i} />
-                )}
-              </div>
+              <div
+                className="art-content ql-editor"
+                dangerouslySetInnerHTML={{ __html: article.content }}
+              />
             ) : (
               <div className="art-no-content">
                 <p>Nội dung chi tiết đang được cập nhật...</p>

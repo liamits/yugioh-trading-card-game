@@ -1,6 +1,13 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Admin.css'
+
+const ReactQuill = lazy(() =>
+  import('react-quill').then(m => {
+    import('react-quill/dist/quill.snow.css')
+    return m
+  })
+)
 
 const API_ARTICLES = 'http://localhost:5000/api/articles'
 const API_ADMIN_ARTICLES = 'http://localhost:5000/api/admin/articles'
@@ -17,6 +24,12 @@ const emptyArticle = {
   image: IMAGES[0], author: 'Admin', published: true, color: '#8ab4f8'
 }
 
+const quillFormats = [
+  'header', 'bold', 'italic', 'underline', 'strike',
+  'color', 'background', 'list', 'bullet', 'align',
+  'link', 'image'
+]
+
 export default function Admin() {
   const navigate = useNavigate()
   const [page, setPage] = useState('articles') // 'articles' | 'categories' | 'settings'
@@ -28,6 +41,54 @@ export default function Admin() {
   const token = localStorage.getItem('admin_token')
   const username = localStorage.getItem('admin_user') || 'admin'
   const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+  const quillRef = useRef(null)
+
+  // Image upload handler for Quill toolbar - called via modules.toolbar.handlers
+  const imageHandler = useRef(null)
+  imageHandler.current = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*'
+    input.onchange = async () => {
+      const file = input.files[0]
+      if (!file) return
+      const fd = new FormData()
+      fd.append('image', file)
+      try {
+        const res = await fetch('http://localhost:5000/api/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd
+        })
+        const data = await res.json()
+        if (data.url) {
+          const quill = quillRef.current?.getEditor()
+          if (quill) {
+            const range = quill.getSelection(true)
+            quill.insertEmbed(range.index, 'image', `http://localhost:5000${data.url}`)
+          }
+        }
+      } catch { setError('Upload ảnh thất bại') }
+    }
+    input.click()
+  }
+
+  const quillModulesRef = useRef({
+    toolbar: {
+      container: [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ color: [] }, { background: [] }],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        [{ align: [] }],
+        ['link', 'image'],
+        ['clean'],
+      ],
+      handlers: {
+        image: () => imageHandler.current?.()
+      }
+    }
+  })
 
   const handleLogout = () => {
     localStorage.removeItem('admin_token')
@@ -477,9 +538,19 @@ export default function Admin() {
 
               <div className="form-group">
                 <label>Nội dung</label>
-                <textarea className="admin-textarea" value={form.content}
-                  onChange={e => setForm({ ...form, content: e.target.value })}
-                  placeholder="Nội dung chi tiết..." rows={5} />
+                <div className="quill-wrapper">
+                  <Suspense fallback={<div className="admin-textarea" style={{minHeight:200, display:'flex', alignItems:'center', justifyContent:'center', color:'#484f58'}}>Đang tải editor...</div>}>
+                    <ReactQuill
+                      ref={quillRef}
+                      theme="snow"
+                      value={form.content}
+                      onChange={val => setForm({ ...form, content: val })}
+                      modules={quillModulesRef.current}
+                      formats={quillFormats}
+                      placeholder="Nội dung chi tiết..."
+                    />
+                  </Suspense>
+                </div>
               </div>
 
               <div className="form-row-2">

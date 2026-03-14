@@ -244,3 +244,44 @@
   .art-desc, .art-content { padding: 16px 20px; }
   .art-container { padding: 20px 16px 40px; }
 }
+
+/* ── QUILL RENDERED CONTENT ── */
+.art-content.ql-editor {
+  padding: 28px 40px 40px;
+  background: transparent;
+  font-size: 16px;
+  color: #c8cace;
+  line-height: 1.9;
+}
+.art-content.ql-editor p { margin: 0 0 16px; }
+.art-content.ql-editor h1,
+.art-content.ql-editor h2,
+.art-content.ql-editor h3 {
+  color: #e8eaed;
+  margin: 24px 0 12px;
+}
+.art-content.ql-editor h1 { font-size: 26px; }
+.art-content.ql-editor h2 { font-size: 22px; }
+.art-content.ql-editor h3 { font-size: 18px; }
+.art-content.ql-editor a { color: #8ab4f8; }
+.art-content.ql-editor img {
+  max-width: 100%;
+  border-radius: 8px;
+  margin: 12px 0;
+}
+.art-content.ql-editor ul,
+.art-content.ql-editor ol {
+  padding-left: 24px;
+  margin: 0 0 16px;
+}
+.art-content.ql-editor li { margin-bottom: 6px; }
+.art-content.ql-editor blockquote {
+  border-left: 3px solid #8ab4f8;
+  padding-left: 16px;
+  color: #8b949e;
+  margin: 16px 0;
+  font-style: italic;
+}
+@media (max-width: 900px) {
+  .art-content.ql-editor { padding: 16px 20px; }
+}
