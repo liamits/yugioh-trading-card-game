@@ -43,13 +43,14 @@ export default function Admin() {
   const [filterCat, setFilterCat] = useState('all')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
-  // Categories
-  const [categories, setCategories] = useState(
-    JSON.parse(localStorage.getItem('admin_categories') || 'null') || CATEGORIES_DEFAULT
-  )
-  const [newCat, setNewCat] = useState('')
-  const [editCatIdx, setEditCatIdx] = useState(null)
-  const [editCatVal, setEditCatVal] = useState('')
+  // Categories - normalize từ string hoặc object
+  const rawCats = JSON.parse(localStorage.getItem('admin_categories') || 'null') || CATEGORIES_DEFAULT
+  const normalizeCats = (cats) => cats.map(c => typeof c === 'string' ? { name: c, color: '#8ab4f8' } : c)
+  const [categories, setCategories] = useState(normalizeCats(rawCats))
+  const [catSearch, setCatSearch] = useState('')
+  const [showCatModal, setShowCatModal] = useState(false)
+  const [catForm, setCatForm] = useState({ name: '', color: '#8ab4f8' })
+  const [catEditId, setCatEditId] = useState(null)
 
   // Settings
   const [settings, setSettings] = useState(
@@ -145,24 +146,29 @@ export default function Admin() {
     showToast('✅ Đã lưu danh mục')
   }
 
-  const handleAddCat = () => {
-    const val = newCat.trim().toUpperCase()
-    if (!val || categories.includes(val)) return
-    saveCategories([...categories, val])
-    setNewCat('')
+  const handleSubmitCat = () => {
+    const name = catForm.name.trim().toUpperCase()
+    if (!name) return
+    if (catEditId !== null) {
+      // Edit
+      const updated = [...categories]
+      updated[catEditId] = { ...updated[catEditId], name, color: catForm.color }
+      saveCategories(updated)
+    } else {
+      // Add - check duplicate
+      if (categories.some(c => c.name === name)) {
+        setError('Danh mục đã tồn tại!')
+        return
+      }
+      saveCategories([...categories, { name, color: catForm.color }])
+    }
+    setShowCatModal(false)
+    setCatForm({ name: '', color: '#8ab4f8' })
+    setCatEditId(null)
   }
 
   const handleDeleteCat = (idx) => {
     saveCategories(categories.filter((_, i) => i !== idx))
-  }
-
-  const handleSaveCat = (idx) => {
-    const val = editCatVal.trim().toUpperCase()
-    if (!val) return
-    const updated = [...categories]
-    updated[idx] = val
-    saveCategories(updated)
-    setEditCatIdx(null)
   }
 
   // ── Settings ──────────────────────────────────────────
@@ -172,6 +178,7 @@ export default function Admin() {
   }
 
   const filtered = filterCat === 'all' ? articles : articles.filter(a => a.category === filterCat)
+  const catNames = categories.map(c => typeof c === 'string' ? c : c.name)
 
   return (
     <div className="admin-page">
@@ -249,7 +256,7 @@ export default function Admin() {
               <button className={`filter-btn ${filterCat === 'all' ? 'active' : ''}`} onClick={() => setFilterCat('all')}>
                 Tất cả ({articles.length})
               </button>
-              {categories.map(cat => (
+              {catNames.map(cat => (
                 <button key={cat} className={`filter-btn ${filterCat === cat ? 'active' : ''}`} onClick={() => setFilterCat(cat)}>
                   {cat} ({articles.filter(a => a.category === cat).length})
                 </button>
@@ -311,48 +318,48 @@ export default function Admin() {
             <div className="admin-header">
               <div>
                 <h1>🏷️ Danh mục</h1>
-                <p>{categories.length} danh mục</p>
+                <p>{categories.filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase())).length} / {categories.length} danh mục</p>
               </div>
+              <button className="btn-primary" onClick={() => { setCatForm({ name: '', color: '#8ab4f8' }); setCatEditId(null); setShowCatModal(true) }}>
+                + Thêm danh mục
+              </button>
             </div>
 
-            <div className="cat-add-row">
+            {/* Search */}
+            <div className="cat-search-row">
               <input
                 className="admin-input"
-                placeholder="Tên danh mục mới..."
-                value={newCat}
-                onChange={e => setNewCat(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleAddCat()}
+                placeholder="🔍  Tìm kiếm danh mục..."
+                value={catSearch}
+                onChange={e => setCatSearch(e.target.value)}
               />
-              <button className="btn-primary" onClick={handleAddCat}>+ Thêm</button>
             </div>
 
+            {/* List */}
             <div className="cat-list">
-              {categories.map((cat, idx) => (
-                <div key={idx} className="cat-item">
-                  {editCatIdx === idx ? (
-                    <>
-                      <input
-                        className="admin-input cat-edit-input"
-                        value={editCatVal}
-                        onChange={e => setEditCatVal(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleSaveCat(idx)}
-                        autoFocus
-                      />
-                      <button className="btn-primary small" onClick={() => handleSaveCat(idx)}>Lưu</button>
-                      <button className="btn-ghost small" onClick={() => setEditCatIdx(null)}>Hủy</button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="cat-name">{cat}</span>
-                      <span className="cat-count">{articles.filter(a => a.category === cat).length} bài</span>
-                      <div className="action-btns">
-                        <button className="btn-icon edit" onClick={() => { setEditCatIdx(idx); setEditCatVal(cat) }}>✏️</button>
-                        <button className="btn-icon del" onClick={() => handleDeleteCat(idx)}>🗑️</button>
-                      </div>
-                    </>
-                  )}
+              {categories
+                .filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase()))
+                .map((cat, idx) => (
+                  <div key={idx} className="cat-item">
+                    <div className="cat-color-dot" style={{ background: cat.color || '#8ab4f8' }} />
+                    <span className="cat-name">{cat.name}</span>
+                    <span className="cat-count">{articles.filter(a => a.category === cat.name).length} bài</span>
+                    <div className="action-btns">
+                      <button className="btn-icon edit" onClick={() => {
+                        setCatForm({ name: cat.name, color: cat.color || '#8ab4f8' })
+                        setCatEditId(idx)
+                        setShowCatModal(true)
+                      }}>✏️</button>
+                      <button className="btn-icon del" onClick={() => handleDeleteCat(idx)}>🗑️</button>
+                    </div>
+                  </div>
+                ))
+              }
+              {categories.filter(c => c.name.toLowerCase().includes(catSearch.toLowerCase())).length === 0 && (
+                <div className="empty-row" style={{ padding: '32px', textAlign: 'center', color: '#484f58' }}>
+                  Không tìm thấy danh mục nào
                 </div>
-              ))}
+              )}
             </div>
           </>
         )}
@@ -451,7 +458,7 @@ export default function Admin() {
                   <label>Danh mục *</label>
                   <select className="admin-input" value={form.category}
                     onChange={e => setForm({ ...form, category: e.target.value })}>
-                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    {catNames.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
@@ -531,6 +538,52 @@ export default function Admin() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Modal */}
+      {showCatModal && (
+        <div className="modal-bg" onClick={() => setShowCatModal(false)}>
+          <div className="admin-modal cat-modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{catEditId !== null ? '✏️ Sửa danh mục' : '+ Thêm danh mục mới'}</h2>
+              <button className="modal-close" onClick={() => setShowCatModal(false)}>✕</button>
+            </div>
+            <div className="cat-modal-body">
+              <div className="form-group">
+                <label>Tên danh mục *</label>
+                <input
+                  className="admin-input"
+                  value={catForm.name}
+                  onChange={e => setCatForm({ ...catForm, name: e.target.value })}
+                  placeholder="VD: TIER LIST, TOP DECKS..."
+                  autoFocus
+                  onKeyDown={e => e.key === 'Enter' && handleSubmitCat()}
+                />
+                <span className="cat-input-hint">Tên sẽ được tự động viết hoa</span>
+              </div>
+              <div className="form-group">
+                <label>Màu sắc</label>
+                <div className="color-row">
+                  {COLORS.map(c => (
+                    <div key={c} className={`color-dot ${catForm.color === c ? 'sel' : ''}`}
+                      style={{ background: c }} onClick={() => setCatForm({ ...catForm, color: c })} />
+                  ))}
+                </div>
+                <div className="cat-color-preview">
+                  <span className="cat-badge-preview" style={{ background: catForm.color + '22', color: catForm.color, border: `1px solid ${catForm.color}44` }}>
+                    {catForm.name.trim().toUpperCase() || 'PREVIEW'}
+                  </span>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button className="btn-ghost" onClick={() => setShowCatModal(false)}>Hủy</button>
+                <button className="btn-primary" onClick={handleSubmitCat} disabled={!catForm.name.trim()}>
+                  {catEditId !== null ? 'Cập nhật' : 'Thêm danh mục'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
