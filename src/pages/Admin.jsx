@@ -131,6 +131,7 @@ export default function Admin() {
   )
 
   useEffect(() => { fetchArticles() }, [])
+  useEffect(() => { setCurrentPage(1) }, [filterTitle, filterCat, filterStatus, filterDateFrom, filterDateTo])
 
   const showToast = (msg) => {
     setToast(msg)
@@ -244,6 +245,9 @@ export default function Admin() {
     showToast('✅ Đã lưu cài đặt')
   }
 
+  const [currentPage, setCurrentPage] = useState(1)
+  const PAGE_SIZE = 10
+
   const filtered = articles.filter(a => {
     if (filterCat !== 'all' && a.category !== filterCat) return false
     if (filterStatus === 'published' && !a.published) return false
@@ -253,9 +257,13 @@ export default function Admin() {
     if (filterDateTo && new Date(a.createdAt) > new Date(filterDateTo + 'T23:59:59')) return false
     return true
   })
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const safePage = Math.min(currentPage, totalPages)
+  const paginated = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   const catNames = categories.map(c => typeof c === 'string' ? c : c.name)
   const hasActiveFilter = filterTitle || filterCat !== 'all' || filterStatus !== 'all' || filterDateFrom || filterDateTo
-  const resetFilters = () => { setFilterTitle(''); setFilterCat('all'); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo('') }
+  const resetFilters = () => { setFilterTitle(''); setFilterCat('all'); setFilterStatus('all'); setFilterDateFrom(''); setFilterDateTo(''); setCurrentPage(1) }
 
   return (
     <div className="admin-page">
@@ -388,9 +396,9 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.length === 0
+                    {paginated.length === 0
                       ? <tr><td colSpan={7} className="empty-row">Chưa có bài viết nào</td></tr>
-                      : filtered.map(a => (
+                      : paginated.map(a => (
                         <tr key={a._id}>
                           <td><img src={a.image} alt="" className="table-thumb" /></td>
                           <td>
@@ -420,6 +428,28 @@ export default function Admin() {
                     }
                   </tbody>
                 </table>
+              </div>
+            )}
+            {/* Pagination */}
+            {!loading && filtered.length > 0 && (
+              <div className="pagination">
+                <button className="page-btn" onClick={() => setCurrentPage(1)} disabled={safePage === 1}>«</button>
+                <button className="page-btn" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={safePage === 1}>‹</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - safePage) <= 2)
+                  .reduce((acc, p, i, arr) => {
+                    if (i > 0 && p - arr[i - 1] > 1) acc.push('...')
+                    acc.push(p)
+                    return acc
+                  }, [])
+                  .map((p, i) => p === '...'
+                    ? <span key={`e${i}`} className="page-ellipsis">…</span>
+                    : <button key={p} className={`page-btn ${p === safePage ? 'active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
+                  )
+                }
+                <button className="page-btn" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={safePage === totalPages}>›</button>
+                <button className="page-btn" onClick={() => setCurrentPage(totalPages)} disabled={safePage === totalPages}>»</button>
+                <span className="page-info">{safePage} / {totalPages} trang · {filtered.length} bài</span>
               </div>
             )}
           </>
