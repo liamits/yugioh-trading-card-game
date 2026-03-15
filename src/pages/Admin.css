@@ -874,3 +874,85 @@
   .pagination { gap: 3px; }
   .page-info { display: none; }
 }
+
+/* ── BULK ACTIONS ── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: rgba(138,180,248,0.08);
+  border: 1px solid rgba(138,180,248,0.25);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.bulk-count {
+  font-size: 13px;
+  color: #8ab4f8;
+  margin-right: 4px;
+}
+.bulk-count strong { font-weight: 800; }
+
+.bulk-actions {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.bulk-btn {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+.bulk-btn.publish {
+  background: rgba(63,185,80,0.12);
+  border-color: rgba(63,185,80,0.3);
+  color: #3fb950;
+}
+.bulk-btn.publish:hover { background: rgba(63,185,80,0.22); }
+
+.bulk-btn.hide {
+  background: rgba(255,255,255,0.05);
+  border-color: #30363d;
+  color: #8b949e;
+}
+.bulk-btn.hide:hover { background: rgba(255,255,255,0.1); color: #e6edf3; }
+
+.bulk-btn.delete {
+  background: rgba(248,81,73,0.1);
+  border-color: rgba(248,81,73,0.3);
+  color: #f85149;
+}
+.bulk-btn.delete:hover { background: rgba(248,81,73,0.2); }
+
+.bulk-clear {
+  background: none;
+  border: none;
+  color: #484f58;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  margin-left: auto;
+  transition: color 0.15s;
+}
+.bulk-clear:hover { color: #e6edf3; }
+
+.row-check {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: #8ab4f8;
+}
+
+.row-selected td {
+  background: rgba(138,180,248,0.05) !important;
+}

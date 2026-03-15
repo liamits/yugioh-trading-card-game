@@ -103,6 +103,35 @@ export default function Admin() {
   const [saving, setSaving] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
 
+  // Bulk selection
+  const [selected, setSelected] = useState(new Set())
+  const toggleSelect = (id) => setSelected(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s })
+  const toggleSelectAll = () => {
+    if (selected.size === paginated.length && paginated.length > 0) setSelected(new Set())
+    else setSelected(new Set(paginated.map(a => a._id)))
+  }
+  const clearSelected = () => setSelected(new Set())
+
+  const handleBulkPublish = async (publish) => {
+    const ids = [...selected]
+    await Promise.all(ids.map(id => {
+      const a = articles.find(x => x._id === id)
+      return fetch(`${API_ARTICLES}/${id}`, { method: 'PUT', headers: authHeaders, body: JSON.stringify({ ...a, published: publish }) })
+    }))
+    await fetchArticles()
+    clearSelected()
+    showToast(publish ? `✅ Đã đăng ${ids.length} bài` : `🔒 Đã ẩn ${ids.length} bài`)
+  }
+
+  const handleBulkDelete = async () => {
+    const ids = [...selected]
+    await Promise.all(ids.map(id => fetch(`${API_ARTICLES}/${id}`, { method: 'DELETE', headers: authHeaders })))
+    await fetchArticles()
+    clearSelected()
+    setDeleteConfirm(null)
+    showToast(`🗑️ Đã xóa ${ids.length} bài`)
+  }
+
   // Filters
   const [filterTitle, setFilterTitle] = useState('')
   const [filterCat, setFilterCat] = useState('all')
@@ -387,48 +416,77 @@ export default function Admin() {
             {loading ? (
               <div className="admin-loading"><div className="spinner" /><p>Đang tải...</p></div>
             ) : (
-              <div className="admin-table-wrap">
-                <table className="admin-table">
-                  <thead>
-                    <tr>
-                      <th>Ảnh</th><th>Tiêu đề & Mô tả</th><th>Danh mục</th>
-                      <th>Tác giả</th><th>Trạng thái</th><th>Ngày tạo</th><th>Thao tác</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paginated.length === 0
-                      ? <tr><td colSpan={7} className="empty-row">Chưa có bài viết nào</td></tr>
-                      : paginated.map(a => (
-                        <tr key={a._id}>
-                          <td><img src={a.image} alt="" className="table-thumb" /></td>
-                          <td>
-                            <div className="table-title">{a.title}</div>
-                            <div className="table-desc">{a.desc}</div>
-                          </td>
-                          <td>
-                            <span className="cat-badge" style={{ background: (a.color || '#8ab4f8') + '22', color: a.color || '#8ab4f8', border: `1px solid ${(a.color || '#8ab4f8')}44` }}>
-                              {a.category}
-                            </span>
-                          </td>
-                          <td className="table-meta">{a.author}</td>
-                          <td>
-                            <button className={`status-btn ${a.published ? 'pub' : 'hid'}`} onClick={() => handleTogglePublish(a)}>
-                              {a.published ? '✅ Đã đăng' : '🔒 Ẩn'}
-                            </button>
-                          </td>
-                          <td className="table-meta">{new Date(a.createdAt).toLocaleDateString('vi-VN')}</td>
-                          <td>
-                            <div className="action-btns">
-                              <button className="btn-icon edit" onClick={() => handleEdit(a)} title="Sửa">✏️</button>
-                              <button className="btn-icon del" onClick={() => setDeleteConfirm(a._id)} title="Xóa">🗑️</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    }
-                  </tbody>
-                </table>
-              </div>
+              <>
+                {/* Bulk action bar */}
+                {selected.size > 0 && (
+                  <div className="bulk-bar">
+                    <span className="bulk-count">Đã chọn <strong>{selected.size}</strong> bài</span>
+                    <div className="bulk-actions">
+                      <button className="bulk-btn publish" onClick={() => handleBulkPublish(true)}>✅ Đăng tất cả</button>
+                      <button className="bulk-btn hide" onClick={() => handleBulkPublish(false)}>🔒 Ẩn tất cả</button>
+                      <button className="bulk-btn delete" onClick={() => setDeleteConfirm('bulk')}>🗑️ Xóa tất cả</button>
+                    </div>
+                    <button className="bulk-clear" onClick={clearSelected}>✕ Bỏ chọn</button>
+                  </div>
+                )}
+
+                <div className="admin-table-wrap">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 36 }}>
+                          <input type="checkbox"
+                            className="row-check"
+                            checked={paginated.length > 0 && selected.size === paginated.length}
+                            onChange={toggleSelectAll}
+                          />
+                        </th>
+                        <th>Ảnh</th><th>Tiêu đề & Mô tả</th><th>Danh mục</th>
+                        <th>Tác giả</th><th>Trạng thái</th><th>Ngày tạo</th><th>Thao tác</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginated.length === 0
+                        ? <tr><td colSpan={8} className="empty-row">Chưa có bài viết nào</td></tr>
+                        : paginated.map(a => (
+                          <tr key={a._id} className={selected.has(a._id) ? 'row-selected' : ''}>
+                            <td>
+                              <input type="checkbox"
+                                className="row-check"
+                                checked={selected.has(a._id)}
+                                onChange={() => toggleSelect(a._id)}
+                              />
+                            </td>
+                            <td><img src={a.image} alt="" className="table-thumb" /></td>
+                            <td>
+                              <div className="table-title">{a.title}</div>
+                              <div className="table-desc">{a.desc}</div>
+                            </td>
+                            <td>
+                              <span className="cat-badge" style={{ background: (a.color || '#8ab4f8') + '22', color: a.color || '#8ab4f8', border: `1px solid ${(a.color || '#8ab4f8')}44` }}>
+                                {a.category}
+                              </span>
+                            </td>
+                            <td className="table-meta">{a.author}</td>
+                            <td>
+                              <button className={`status-btn ${a.published ? 'pub' : 'hid'}`} onClick={() => handleTogglePublish(a)}>
+                                {a.published ? '✅ Đã đăng' : '🔒 Ẩn'}
+                              </button>
+                            </td>
+                            <td className="table-meta">{new Date(a.createdAt).toLocaleDateString('vi-VN')}</td>
+                            <td>
+                              <div className="action-btns">
+                                <button className="btn-icon edit" onClick={() => handleEdit(a)} title="Sửa">✏️</button>
+                                <button className="btn-icon del" onClick={() => setDeleteConfirm(a._id)} title="Xóa">🗑️</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
             {/* Pagination */}
             {!loading && filtered.length > 0 && (
@@ -746,13 +804,25 @@ export default function Admin() {
         <div className="modal-bg" onClick={() => setDeleteConfirm(null)}>
           <div className="confirm-modal" onClick={e => e.stopPropagation()}>
             <h3>⚠️ Xác nhận xóa</h3>
-            <p>{deleteConfirm === 'all' ? 'Xóa toàn bộ bài viết? Không thể hoàn tác.' : 'Xóa bài viết này? Không thể hoàn tác.'}</p>
+            <p>
+              {deleteConfirm === 'all'
+                ? 'Xóa toàn bộ bài viết? Không thể hoàn tác.'
+                : deleteConfirm === 'bulk'
+                ? `Xóa ${selected.size} bài viết đã chọn? Không thể hoàn tác.`
+                : 'Xóa bài viết này? Không thể hoàn tác.'}
+            </p>
             <div className="confirm-actions">
               <button className="btn-ghost" onClick={() => setDeleteConfirm(null)}>Hủy</button>
-              <button className="btn-danger" onClick={() => deleteConfirm === 'all'
-                ? (articles.forEach(a => fetch(`${API_ARTICLES}/${a._id}`, { method: 'DELETE' })), setArticles([]), setDeleteConfirm(null), showToast('🗑️ Đã xóa tất cả'))
-                : handleDelete(deleteConfirm)
-              }>Xóa</button>
+              <button className="btn-danger" onClick={() => {
+                if (deleteConfirm === 'all') {
+                  articles.forEach(a => fetch(`${API_ARTICLES}/${a._id}`, { method: 'DELETE' }))
+                  setArticles([]); setDeleteConfirm(null); showToast('🗑️ Đã xóa tất cả')
+                } else if (deleteConfirm === 'bulk') {
+                  handleBulkDelete()
+                } else {
+                  handleDelete(deleteConfirm)
+                }
+              }}>Xóa</button>
             </div>
           </div>
         </div>
