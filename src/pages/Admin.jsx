@@ -21,7 +21,7 @@ const IMAGES = [
 
 const emptyArticle = {
   title: '', category: 'TIER LIST', desc: '', content: '',
-  image: IMAGES[0], author: 'Admin', published: true, color: '#8ab4f8'
+  image: '', author: 'Admin', published: true, color: '#8ab4f8'
 }
 
 const quillFormats = [
