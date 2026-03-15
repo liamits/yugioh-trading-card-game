@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Home.css'
 
@@ -19,6 +19,15 @@ function Home() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
+  const articlesSectionRef = useRef(null)
+
+  const selectCategory = (cat) => {
+    setActiveCategory(cat)
+    setSearch('')
+    setTimeout(() => {
+      articlesSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 50)
+  }
 
   useEffect(() => {
     fetch('http://localhost:5000/api/articles')
@@ -47,7 +56,14 @@ function Home() {
 
         <div className="navbar-links">
           {navItems.map(item => (
-            <a key={item} className="nav-link" href="#">{item}</a>
+            <a
+              key={item}
+              className={`nav-link ${activeCategory === item ? 'active' : ''}`}
+              href="#"
+              onClick={e => { e.preventDefault(); selectCategory(item) }}
+            >
+              {item}
+            </a>
           ))}
         </div>
 
@@ -71,7 +87,7 @@ function Home() {
       </div>
 
       {/* Articles Section */}
-      <div className="home-content">
+      <div className="home-content" ref={articlesSectionRef}>
         <div className="articles-header">
           <h2>📰 Bài viết & Hướng dẫn</h2>
           <div className="home-search">
@@ -88,11 +104,11 @@ function Home() {
 
         {/* Category tabs */}
         <div className="home-cat-tabs">
-          <button className={`home-cat-tab ${activeCategory === 'all' ? 'active' : ''}`} onClick={() => setActiveCategory('all')}>
+          <button className={`home-cat-tab ${activeCategory === 'all' ? 'active' : ''}`} onClick={() => selectCategory('all')}>
             Tất cả
           </button>
           {navItems.map(cat => (
-            <button key={cat} className={`home-cat-tab ${activeCategory === cat ? 'active' : ''}`} onClick={() => setActiveCategory(cat)}>
+            <button key={cat} className={`home-cat-tab ${activeCategory === cat ? 'active' : ''}`} onClick={() => selectCategory(cat)}>
               {cat}
             </button>
           ))}
