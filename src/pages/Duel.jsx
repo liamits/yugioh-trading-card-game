@@ -139,6 +139,20 @@ function Duel() {
       socket.on('turn-swapped', (newTurnId) => {
         setCurrentTurn(newTurnId === socket.id ? 'player' : 'ai')
       })
+
+      socket.on('opponent-chain-request', (prompt) => {
+        // Map 'player' to 'ai' for the receiver
+        const mappedPrompt = {
+          ...prompt,
+          player: 'player' // In the receiver's perspective, they are the 'player' responding
+        }
+        setChainPrompt(mappedPrompt)
+      })
+
+      socket.on('opponent-chain-response', (response) => {
+        // Handle the opponent's Yes/No response
+        handleOpponentChainResponse(response)
+      })
     }
 
     return () => {
@@ -149,8 +163,45 @@ function Duel() {
       socket.off('opponent-hand-update')
       socket.off('opponent-deck-update')
       socket.off('turn-swapped')
+      socket.off('opponent-chain-request')
+      socket.off('opponent-chain-response')
     }
   }, [isMultiplayer, roomId])
+
+  useEffect(() => {
+    if (isMultiplayer && roomId && chainPrompt.active && chainPrompt.player === 'ai') {
+      // If we are prompting the opponent ('ai' in our perspective)
+      socket.emit('chain-request', { roomId, prompt: chainPrompt })
+    }
+  }, [chainPrompt.active, isMultiplayer, roomId])
+
+  const handleOpponentChainResponse = (response) => {
+    setChainPrompt(prev => {
+      if (!prev.active) return prev
+      
+      if (response === 'yes') {
+        if (prev.onResolve) prev.onResolve()
+      } else {
+        if (prev.onCancel) prev.onCancel()
+      }
+      
+      return { ...prev, active: false }
+    })
+  }
+
+  const handleChainResponse = (response) => {
+    if (isMultiplayer && roomId && chainPrompt.player === 'player') {
+      socket.emit('chain-response', { roomId, response })
+    }
+    
+    if (response === 'yes') {
+      if (chainPrompt.onResolve) chainPrompt.onResolve()
+    } else {
+      if (chainPrompt.onCancel) chainPrompt.onCancel()
+    }
+
+    setChainPrompt(prev => ({ ...prev, active: false }))
+  }
 
   // Initial turn sync from room data
   useEffect(() => {
