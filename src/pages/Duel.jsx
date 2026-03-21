@@ -288,22 +288,66 @@ function Duel() {
 
   const aiActionSummon = () => {
     return new Promise((resolve) => {
-      // Find a monster in hand that's level 1-4
-      const monsterIndex = aiHand.findIndex(c => c.type.includes('Monster') && (c.level || 0) <= 4)
+      if (normalSummonUsed) {
+        setTimeout(resolve, 500)
+        return
+      }
+
+      // Sort monsters by ATK to pick the strongest
+      const monstersInHand = aiHand
+        .map((c, i) => ({ card: c, index: i }))
+        .filter(m => m.card.type.includes('Monster'))
+        .sort((a, b) => b.card.atk - a.card.atk)
+
+      const availableMonsters = aiField.monsters.filter(m => m !== null)
       const emptyZoneIndex = aiField.monsters.findIndex(m => m === null)
 
-      if (monsterIndex !== -1 && emptyZoneIndex !== -1 && !normalSummonUsed) {
-        const card = aiHand[monsterIndex]
-        
-        // Update states
-        setAiHand(prev => prev.filter((_, i) => i !== monsterIndex))
-        setAiField(prev => {
-          const newMonsters = [...prev.monsters]
-          newMonsters[emptyZoneIndex] = { ...card, faceUp: true, position: 'attack', justSummoned: true }
-          return { ...prev, monsters: newMonsters }
-        })
-        setNormalSummonUsed(true)
-        console.log(`AI Summoned ${card.name}`)
+      for (const m of monstersInHand) {
+        const level = m.card.level || 0
+        let tributesNeeded = 0
+        if (level >= 10) tributesNeeded = 3
+        else if (level >= 7) tributesNeeded = 2
+        else if (level >= 5) tributesNeeded = 1
+
+        if (tributesNeeded === 0 && emptyZoneIndex !== -1) {
+          // Normal Summon
+          const card = m.card
+          setAiHand(prev => prev.filter((_, i) => i !== m.index))
+          setAiField(prev => {
+            const newMonsters = [...prev.monsters]
+            newMonsters[emptyZoneIndex] = { ...card, faceUp: true, position: 'attack', justSummoned: true }
+            return { ...prev, monsters: newMonsters }
+          })
+          setNormalSummonUsed(true)
+          console.log(`AI Normal Summoned ${card.name}`)
+          break
+        } else if (tributesNeeded > 0 && availableMonsters.length >= tributesNeeded) {
+          // Tribute Summon
+          const card = m.card
+          
+          // Selection logic: pick the first N monsters to tribute
+          setAiField(prev => {
+            const newMonsters = [...prev.monsters]
+            let tCount = 0
+            for (let i = 0; i < newMonsters.length; i++) {
+              if (newMonsters[i] !== null && tCount < tributesNeeded) {
+                setAiGraveyard(gy => [...gy, newMonsters[i]])
+                newMonsters[i] = null
+                tCount++
+              }
+            }
+            
+            // Re-find empty zone after tributes
+            const newEmptyZone = newMonsters.findIndex(mz => mz === null)
+            newMonsters[newEmptyZone] = { ...card, faceUp: true, position: 'attack', justSummoned: true }
+            return { ...prev, monsters: newMonsters }
+          })
+          
+          setAiHand(prev => prev.filter((_, i) => i !== m.index))
+          setNormalSummonUsed(true)
+          console.log(`AI Tribute Summoned ${card.name}`)
+          break
+        }
       }
       
       setTimeout(resolve, 1000)
