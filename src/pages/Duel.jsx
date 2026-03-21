@@ -268,6 +268,12 @@ function Duel() {
     }
   }, [currentTurn, isMultiplayer, gameOver])
 
+  useEffect(() => {
+    if (!isMultiplayer && chainPrompt.active && chainPrompt.player === 'ai') {
+      handleAiChainResponse(chainPrompt)
+    }
+  }, [chainPrompt.active, isMultiplayer])
+
   const handleAiTurn = async () => {
     console.log("AI is thinking...")
     
@@ -2933,11 +2939,7 @@ function Duel() {
       })
       // If AI, auto-cancel for now (until AI is fully implemented)
       if (isPlayerAttacking) {
-        // give AI 1 second to "think" then cancel
-        setTimeout(() => {
-          setChainPrompt(prev => ({ ...prev, active: false }))
-          executeBattleCalculation(attacker, defender)
-        }, 1000)
+        // AI will be handled by handleAiChainResponse via useEffect
       }
       return
     }
