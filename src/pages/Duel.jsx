@@ -2947,12 +2947,21 @@ function Duel() {
     executeBattleCalculation(attacker, defender)
   }
 
-  const executeBattleCalculation = (attacker, defender) => {
-    // Re-verify attacker still exists and can attack (in case chain changed state)
-    // To properly access fresh state, we rely on the component re-render or state variables, 
-    // but React state enclosures are tricky. We'll proceed with the passed objects for now.
-    const attackerCard = attacker.card
+    // Re-verify attacker still exists on field
+    const freshAttackerField = isPlayerAttacking ? playerField : aiField
+    if (!freshAttackerField.monsters[attacker.index] || freshAttackerField.monsters[attacker.index].id !== attacker.card.id) {
+      console.log("Attack cancelled: Attacker no longer on field or changed")
+      return
+    }
 
+    // Re-verify defender still exists on field
+    const freshDefenderField = isPlayerAttacking ? aiField : playerField
+    if (!freshDefenderField.monsters[defender.index] || freshDefenderField.monsters[defender.index].id !== defender.card.id) {
+       console.log("Attack cancelled: Defender no longer on field or changed")
+       return
+    }
+
+    const attackerCard = attacker.card
     const defenderCard = defender.card
 
     const isPlayerAttacking = currentTurn === 'player'
@@ -3113,10 +3122,7 @@ function Duel() {
         context: { type: 'direct_attack', attacker: selectedAttacker }
       })
       if (isPlayerAttacking) {
-        setTimeout(() => {
-          setChainPrompt(prev => ({ ...prev, active: false }))
-          executeDirectAttack()
-        }, 1000)
+        // AI will be handled by handleAiChainResponse via useEffect
       }
       return
     }
@@ -3127,8 +3133,17 @@ function Duel() {
   const executeDirectAttack = (aiAttacker = null) => {
     const attacker = aiAttacker || selectedAttacker
     if (!attacker) return
-    const attackerCard = attacker.card
+
+    // Re-verify attacker still exists on field
     const isPlayerAttacking = currentTurn === 'player'
+    const freshAttackerField = isPlayerAttacking ? playerField : aiField
+    if (!freshAttackerField.monsters[attacker.index] || freshAttackerField.monsters[attacker.index].id !== attacker.card.id) {
+      console.log("Direct Attack cancelled: Attacker no longer on field")
+      if (!aiAttacker) setSelectedAttacker(null)
+      return
+    }
+
+    const attackerCard = attacker.card
     
     // Re-check monsters
     const opponentField = isPlayerAttacking ? aiField : playerField
