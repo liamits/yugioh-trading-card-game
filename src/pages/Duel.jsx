@@ -260,6 +260,11 @@ function Duel() {
   }
 
   const handleEndTurn = () => {
+    if (isMultiplayer && roomId) {
+      socket.emit('next-turn', { roomId })
+      return
+    }
+
     const currentHand = currentTurn === 'player' ? playerHand : aiHand
     
     // Check hand limit before ending turn
