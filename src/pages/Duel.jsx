@@ -346,7 +346,7 @@ function Duel() {
   }
 
   const aiActionBattle = () => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       setBattlePhase(true)
       
       const aiMonsters = aiField.monsters
