@@ -1,11 +1,17 @@
 import { useState, useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import io from 'socket.io-client'
 import './Duel.css'
+
+const socket = io('http://localhost:5000')
 
 function Duel() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { player, ai } = location.state || {}
+  const { player, ai, opponent, isMultiplayer, roomId, myId } = location.state || {}
+
+  // In multiplayer, 'ai' refers to the other human player
+  const duelOpponent = isMultiplayer ? opponent : ai
 
   const [playerLP, setPlayerLP] = useState(8000)
   const [aiLP, setAiLP] = useState(8000)
@@ -105,6 +111,24 @@ function Duel() {
       return
     }
   }, [])
+
+  useEffect(() => {
+    if (isMultiplayer && roomId) {
+      socket.on('opponent-lp-update', (lp) => {
+        setAiLP(lp)
+      })
+
+      socket.on('opponent-phase-update', ({ phase, turn }) => {
+        setBattlePhase(phase)
+        setCurrentTurn(turn)
+      })
+    }
+
+    return () => {
+      socket.off('opponent-lp-update')
+      socket.off('opponent-phase-update')
+    }
+  }, [isMultiplayer, roomId])
 
   useEffect(() => {
     // Check win/lose condition
