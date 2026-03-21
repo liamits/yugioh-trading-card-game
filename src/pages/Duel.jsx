@@ -349,30 +349,41 @@ function Duel() {
     return new Promise((resolve) => {
       setBattlePhase(true)
       
-      const aiMonsters = aiField.monsters.map((m, i) => m ? { ...m, index: i } : null).filter(m => m !== null)
+      const aiMonsters = aiField.monsters
+        .map((m, i) => m ? { card: m, index: i } : null)
+        .filter(m => m !== null && m.card.position === 'attack')
       
       if (aiMonsters.length === 0) {
         setTimeout(resolve, 1000)
         return
       }
 
-      // Simple attack logic: try to attack anything if possible
-      // In a real duel, we'd need to call handleAttack or similar
-      // For now, let's just use a simple direct attack if player has no monsters
-      const playerMonsters = playerField.monsters.filter(m => m !== null)
-      
-      if (playerMonsters.length === 0) {
-        // Direct attack with all monsters
-        let totalDamage = 0
-        aiMonsters.forEach(m => {
-          totalDamage += m.atk
-        })
+      const playerMonsters = playerField.monsters
+        .map((m, i) => m ? { card: m, index: i } : null)
+        .filter(m => m !== null)
+
+      // Sequential attacks
+      for (const attacker of aiMonsters) {
+        console.log(`AI evaluating attack for ${attacker.card.name}`)
         
-        if (totalDamage > 0) {
-          setTimeout(() => {
-            setPlayerLP(prev => Math.max(0, prev - totalDamage))
-            console.log(`AI attacked directly for ${totalDamage}`)
-          }, 500)
+        if (playerMonsters.length === 0) {
+          // Direct attack
+          handleDirectAttack(attacker)
+          await new Promise(r => setTimeout(r, 2000))
+        } else {
+          // Find a target AI can beat
+          const target = playerMonsters.find(p => {
+            if (p.card.faceUp) {
+              if (p.card.position === 'attack') return attacker.card.atk > p.card.atk
+              return attacker.card.atk > p.card.def
+            }
+            return true // Attack face-down monsters
+          })
+
+          if (target) {
+            handleBattle(attacker, target)
+            await new Promise(r => setTimeout(r, 2500))
+          }
         }
       }
       
@@ -2888,8 +2899,9 @@ function Duel() {
     setSelectedAttacker(null)
   }
 
-  const handleDirectAttack = () => {
-    if (!selectedAttacker) return
+  const handleDirectAttack = (aiAttacker = null) => {
+    const attacker = aiAttacker || selectedAttacker
+    if (!attacker) return
 
     const attackerCard = selectedAttacker.card
     const isPlayerAttacking = currentTurn === 'player'
@@ -2926,8 +2938,9 @@ function Duel() {
     executeDirectAttack()
   }
 
-  const executeDirectAttack = () => {
-    if (!selectedAttacker) return
+  const executeDirectAttack = (aiAttacker = null) => {
+    const attacker = aiAttacker || selectedAttacker
+    if (!attacker) return
     const attackerCard = selectedAttacker.card
     const isPlayerAttacking = currentTurn === 'player'
     
@@ -2950,7 +2963,7 @@ function Duel() {
     }
 
     alert(`${attackerCard.name} tấn công trực tiếp! Damage: ${damage}`)
-    setSelectedAttacker(null)
+    if (!aiAttacker) setSelectedAttacker(null)
   }
 
   const handleGraveyardClick = (owner) => {
