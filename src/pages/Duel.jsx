@@ -135,6 +135,10 @@ function Duel() {
       socket.on('opponent-deck-update', (deckLength) => {
         setAiDeck(new Array(deckLength).fill({ id: 'dummy', isUnknown: true }))
       })
+
+      socket.on('turn-swapped', (newTurnId) => {
+        setCurrentTurn(newTurnId === socket.id ? 'player' : 'ai')
+      })
     }
 
     return () => {
@@ -144,8 +148,17 @@ function Duel() {
       socket.off('opponent-gy-update')
       socket.off('opponent-hand-update')
       socket.off('opponent-deck-update')
+      socket.off('turn-swapped')
     }
   }, [isMultiplayer, roomId])
+
+  // Initial turn sync from room data
+  useEffect(() => {
+    if (isMultiplayer && location.state?.roomData) {
+      const { currentTurnId } = location.state.roomData
+      setCurrentTurn(currentTurnId === socket.id ? 'player' : 'ai')
+    }
+  }, [isMultiplayer])
 
   useEffect(() => {
     if (isMultiplayer && roomId) {
@@ -3279,15 +3292,22 @@ function Duel() {
               <div className="gy-count">{playerGraveyard.length}</div>
             )}
           </div>
-          <button className="battle-btn" onClick={handleEndTurn}>
+          <button 
+            className={`battle-btn ${currentTurn === 'ai' ? 'disabled' : ''}`} 
+            onClick={handleEndTurn}
+            disabled={currentTurn === 'ai'}
+          >
             <span className="battle-text">End Turn</span>
           </button>
           <button 
-            className={`battle-btn ${battlePhase ? 'battle-active' : ''}`}
+            className={`battle-btn ${battlePhase ? 'battle-active' : ''} ${currentTurn === 'ai' ? 'disabled' : ''}`}
             onClick={() => {
-              setBattlePhase(!battlePhase)
-              setSelectedAttacker(null)
+              if (currentTurn === 'player') {
+                setBattlePhase(!battlePhase)
+                setSelectedAttacker(null)
+              }
             }}
+            disabled={currentTurn === 'ai'}
           >
             <span className="battle-text">{battlePhase ? 'End Battle' : 'Battle'}</span>
           </button>

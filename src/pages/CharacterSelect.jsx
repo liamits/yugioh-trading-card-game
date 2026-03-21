@@ -37,7 +37,8 @@ function CharacterSelect() {
             opponent: opponent.character,
             isMultiplayer: true,
             roomId: roomId,
-            myId: socket.id
+            myId: socket.id,
+            roomData: room
           } 
         })
       })

@@ -110,8 +110,22 @@ io.on('connection', (socket) => {
       // If both players have characters, start the duel
       const allReady = room.players.every(p => p.character)
       if (allReady && room.players.length === 2) {
+        // Decide who goes first (randomly)
+        room.currentTurnId = room.players[Math.floor(Math.random() * 2)].id
         io.to(roomId).emit('duel-start', room)
-        console.log(`🎮 All players ready in room ${roomId}. Duel started!`)
+        console.log(`🎮 Duel started in room ${roomId}. First turn: ${room.currentTurnId}`)
+      }
+    }
+  })
+
+  socket.on('next-turn', ({ roomId }) => {
+    const room = rooms.get(roomId)
+    if (room) {
+      const nextPlayer = room.players.find(p => p.id !== room.currentTurnId)
+      if (nextPlayer) {
+        room.currentTurnId = nextPlayer.id
+        io.to(roomId).emit('turn-swapped', room.currentTurnId)
+        console.log(`🔄 Turn swapped in room ${roomId}. New turn: ${room.currentTurnId}`)
       }
     }
   })
