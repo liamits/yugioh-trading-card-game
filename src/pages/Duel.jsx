@@ -838,14 +838,13 @@ function Duel() {
 
   const handleDrawEffect = (amount, isPlayerTurn) => {
     const deck = isPlayerTurn ? playerDeck : aiDeck
-    const hand = isPlayerTurn ? playerHand : aiHand
     const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
     const setHand = isPlayerTurn ? setPlayerHand : setAiHand
     
     if (deck.length >= amount) {
       const drawnCards = deck.slice(0, amount)
-      setHand([...hand, ...drawnCards])
-      setDeck(deck.slice(amount))
+      setHand(prev => [...prev, ...drawnCards])
+      setDeck(prev => prev.slice(amount))
       alert(`Rút ${amount} lá bài: ${drawnCards.map(c => c.name).join(', ')}`)
     } else {
       alert(`Không đủ bài trong deck để rút ${amount} lá!`)
