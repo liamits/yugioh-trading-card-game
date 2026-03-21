@@ -78,6 +78,13 @@ function Duel() {
     onCancel: null,
     message: ''
   })
+  const [deckSelection, setDeckSelection] = useState({
+    active: false,
+    list: [],
+    onSelect: null,
+    onCancel: null,
+    message: ''
+  })
   
   // Chain System States
   const [chainStack, setChainStack] = useState([])
@@ -88,6 +95,9 @@ function Duel() {
     onResolve: null, // what happens when the prompt is answered
     onCancel: null // if they choose not to chain
   })
+
+  // Phase 4 States
+  const [skipNextDraw, setSkipNextDraw] = useState({ player: false, ai: false })
 
   useEffect(() => {
     if (!player || !ai) {
@@ -235,13 +245,23 @@ function Duel() {
     
     // Draw a card for the next player
     if (nextTurn === 'player' && playerDeck.length > 0) {
-      const newCard = playerDeck[0]
-      setPlayerHand([...playerHand, newCard])
-      setPlayerDeck(playerDeck.slice(1))
+      if (skipNextDraw.player) {
+        alert('Time Seal: Bạn bỏ qua Draw Phase!')
+        setSkipNextDraw(prev => ({ ...prev, player: false }))
+      } else {
+        const newCard = playerDeck[0]
+        setPlayerHand([...playerHand, newCard])
+        setPlayerDeck(playerDeck.slice(1))
+      }
     } else if (nextTurn === 'ai' && aiDeck.length > 0) {
-      const newCard = aiDeck[0]
-      setAiHand([...aiHand, newCard])
-      setAiDeck(aiDeck.slice(1))
+      if (skipNextDraw.ai) {
+        alert('Time Seal: Đối thủ bỏ qua Draw Phase!')
+        setSkipNextDraw(prev => ({ ...prev, ai: false }))
+      } else {
+        const newCard = aiDeck[0]
+        setAiHand([...aiHand, newCard])
+        setAiDeck(aiDeck.slice(1))
+      }
     }
   }
 
@@ -273,7 +293,7 @@ function Duel() {
     
     // Send selected cards to graveyard
     const discardedCards = selectedDiscards.map(i => currentHand[i])
-    setGraveyard([...graveyard, ...discardedCards])
+    setGraveyard(prev => [...prev, ...discardedCards])
     
     // Remove from hand
     const newHand = currentHand.filter((_, i) => !selectedDiscards.includes(i))
@@ -562,7 +582,7 @@ function Duel() {
       setHand(newHand)
       
       // Send to GY immediately
-      setGraveyard([...graveyard, card])
+      setGraveyard(prev => [...prev, card])
       
       // Show activation
       setActivatingSpell(card)
@@ -836,6 +856,43 @@ function Duel() {
     setSelectedAttacker(null)
   }
 
+  const handleFlipEffect = (card, index, owner) => {
+    if (!card) return
+    const cardName = card.name.toLowerCase()
+    const isPlayer = owner === 'player'
+    
+    if (cardName.includes('magician of faith')) {
+      const gy = isPlayer ? playerGraveyard : aiGraveyard
+      const spellsInGy = gy.filter(c => c && c.type.includes('Spell'))
+      
+      if (spellsInGy.length === 0) {
+        alert('Magician of Faith: Không có Spell nào trong nghĩa địa!')
+        return
+      }
+
+      if (isPlayer) {
+        setGraveyardSelection({
+          active: true,
+          list: spellsInGy,
+          message: 'Magician of Faith: Chọn 1 Spell từ Nghĩa địa để đưa về tay',
+          onSelect: (selectedSpell) => {
+            setPlayerGraveyard(prev => prev.filter(c => c.id !== selectedSpell.id))
+            setPlayerHand(prev => [...prev, selectedSpell])
+            alert(`Magician of Faith: Đã đưa ${selectedSpell.name} về tay!`)
+            setGraveyardSelection(prev => ({ ...prev, active: false }))
+          },
+          onCancel: () => setGraveyardSelection(prev => ({ ...prev, active: false }))
+        })
+      } else {
+        const selectedSpell = spellsInGy[0]
+        setAiGraveyard(prev => prev.filter(c => c.id !== selectedSpell.id))
+        setAiHand(prev => [...prev, selectedSpell])
+        alert(`AI kích hoạt hiệu ứng FLIP của Magician of Faith và lấy ${selectedSpell.name} về tay!`)
+      }
+    }
+  }
+
+
   const handleDrawEffect = (amount, isPlayerTurn) => {
     const deck = isPlayerTurn ? playerDeck : aiDeck
     const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
@@ -850,6 +907,68 @@ function Duel() {
       alert(`Không đủ bài trong deck để rút ${amount} lá!`)
     }
   }
+
+  const checkForHandTraps = (targetPlayer, damage, onProceed) => {
+    const isHuman = targetPlayer === 'player'
+    const hand = isHuman ? playerHand : aiHand
+    const kuribohIndex = hand.findIndex(c => c && c.name.toLowerCase().includes('kuriboh'))
+
+    if (kuribohIndex !== -1 && damage > 0) {
+      // Trigger Kuriboh prompt
+      setChainPrompt({
+        active: true,
+        player: targetPlayer,
+        sourceAction: isHuman ? `Bạn sắp nhận ${damage} sát thương từ trận đấu này! Sử dụng Kuriboh?` : `Đối thủ sắp nhận ${damage} sát thương.`,
+        onResolve: () => {
+          // Handled in handleHandCardClick for player
+        },
+        onCancel: () => onProceed(damage),
+        context: { type: 'hand_trap', targetPlayer, damage, onProceed }
+      })
+
+      // If AI has Kuriboh, decide whether to use it
+      if (targetPlayer === 'ai') {
+        setTimeout(() => {
+          // Use functional state to avoid closure issues
+          setAiHand(currentHand => {
+            const idx = currentHand.findIndex(c => c && c.name.toLowerCase().includes('kuriboh'))
+            if (idx !== -1 && damage >= 500) { // AI uses Kuriboh if damage >= 500
+              const card = currentHand[idx]
+              setAiGraveyard(prev => [...prev, card])
+              alert(`AI đã kích hoạt Kuriboh từ trên tay! Sát thương bị triệt tiêu.`)
+              onProceed(0)
+              setChainPrompt(prev => ({ ...prev, active: false }))
+              return currentHand.filter((_, i) => i !== idx)
+            } else {
+              // Don't use it
+              onProceed(damage)
+              setChainPrompt(prev => ({ ...prev, active: false }))
+              return currentHand
+            }
+          })
+        }, 1500)
+      }
+      return true 
+    }
+    return false
+  }
+
+  const handleActivateKuriboh = (handIndex) => {
+    const card = playerHand[handIndex]
+    if (!card) return
+
+    // Discard
+    setPlayerHand(prev => prev.filter((_, i) => i !== handIndex))
+    setPlayerGraveyard(prev => [...prev, card])
+
+    // Resolve effects
+    const { onProceed } = chainPrompt.context
+    setChainPrompt({ ...chainPrompt, active: false })
+    
+    alert(`Kuriboh: Hiệu ứng kích hoạt! Bạn không nhận sát thương từ trận đấu này.`)
+    onProceed(0)
+  }
+
 
   const handleDrawThenDiscard = (drawAmount, discardAmount, isPlayerTurn) => {
     const deck = isPlayerTurn ? playerDeck : aiDeck
@@ -1114,12 +1233,22 @@ function Duel() {
     const lpGain = allMonsters.length * 300
     
     if (isPlayerTurn) {
-      setPlayerLP(playerLP + lpGain)
+      setPlayerLP(prev => prev + lpGain)
     } else {
-      setAiLP(aiLP + lpGain)
+      setAiLP(prev => prev + lpGain)
     }
     
     alert(`Gift of The Mystical Elf: Hồi phục ${lpGain} LP! (${allMonsters.length} monsters x 300)`)
+  }
+
+  const handleTimeSeal = (isPlayerTurn) => {
+    // Skip opponent's next draw phase
+    if (isPlayerTurn) {
+      setSkipNextDraw(prev => ({ ...prev, ai: true }))
+    } else {
+      setSkipNextDraw(prev => ({ ...prev, player: true }))
+    }
+    alert(`Time Seal: Đối thủ sẽ bỏ qua Draw Phase tiếp theo!`)
   }
 
   const handleShadowSpell = (isPlayerTurn) => {
@@ -1164,40 +1293,82 @@ function Duel() {
   }
 
   const handleDarkMagicCurtain = (isPlayerTurn) => {
+    const currentLP = isPlayerTurn ? playerLP : aiLP
+    const setLP = isPlayerTurn ? setPlayerLP : setAiLP
+    const deck = isPlayerTurn ? playerDeck : aiDeck
+    
+    // Search deck for "Dark Magician"
+    const dmCards = deck.filter(c => c && c.name.includes('Dark Magician'))
+    
+    if (dmCards.length === 0) {
+      alert('Không có Dark Magician trong bộ bài!')
+      return
+    }
+
     // Pay half LP
+    const lpCost = Math.floor(currentLP / 2)
+    setLP(currentLP - lpCost)
+
     if (isPlayerTurn) {
-      const lpCost = Math.floor(playerLP / 2)
-      setPlayerLP(playerLP - lpCost)
-      
-      // Check if player has Dark Magician in deck
-      const darkMagician = player.deck.main.find(c => c.name.includes('Dark Magician'))
-      if (darkMagician) {
-        // Special Summon Dark Magician
-        const field = playerField
-        const setField = setPlayerField
-        const emptyZoneIndex = field.monsters.findIndex(m => m === null)
-        
-        if (emptyZoneIndex !== -1) {
-          const newMonsters = [...field.monsters]
+      setDeckSelection({
+        active: true,
+        list: dmCards,
+        message: `Dark Magic Curtain: Trả ${lpCost} LP. Chọn 1 Dark Magician từ bộ bài để triệu hồi`,
+        onSelect: (selectedDM) => {
+          const emptyZoneIndex = playerField.monsters.findIndex(m => m === null)
+          if (emptyZoneIndex === -1) {
+            alert('Không còn chỗ trống trên sân!')
+            setDeckSelection(prev => ({ ...prev, active: false }))
+            return
+          }
+
+          // Remove from deck
+          setPlayerDeck(prev => {
+            const indexInDeck = prev.findIndex(c => c.id === selectedDM.id)
+            const newDeck = [...prev]
+            if (indexInDeck !== -1) newDeck.splice(indexInDeck, 1)
+            return newDeck
+          })
+
+          // Summon
+          const newMonsters = [...playerField.monsters]
           newMonsters[emptyZoneIndex] = {
-            ...darkMagician,
+            ...selectedDM,
             faceUp: true,
             position: 'attack',
             justSummoned: true,
-            originalAtk: darkMagician.atk,
-            originalDef: darkMagician.def
+            originalAtk: selectedDM.atk,
+            originalDef: selectedDM.def
           }
-          setField({ ...field, monsters: newMonsters })
-          alert(`Dark Magic Curtain: Trả ${lpCost} LP, triệu hồi ${darkMagician.name}!`)
-        } else {
-          alert('Không có zone trống!')
+          setPlayerField({ ...playerField, monsters: newMonsters })
+          setDeckSelection(prev => ({ ...prev, active: false }))
+          alert(`Dark Magic Curtain: Bạn đã triệu hồi ${selectedDM.name}!`)
         }
-      } else {
-        alert('Không có Dark Magician trong deck!')
-      }
+      })
     } else {
-      // Similar for AI
-      alert('Dark Magic Curtain: AI sử dụng (cần implement)')
+      // AI logic: pick first DM
+      const selectedDM = dmCards[0]
+      const emptyZoneIndex = aiField.monsters.findIndex(m => m === null)
+      if (emptyZoneIndex !== -1) {
+        setAiDeck(prev => {
+          const indexInDeck = prev.findIndex(c => c.id === selectedDM.id)
+          const newDeck = [...prev]
+          if (indexInDeck !== -1) newDeck.splice(indexInDeck, 1)
+          return newDeck
+        })
+
+        const newMonsters = [...aiField.monsters]
+        newMonsters[emptyZoneIndex] = {
+          ...selectedDM,
+          faceUp: true,
+          position: 'attack',
+          justSummoned: true,
+          originalAtk: selectedDM.atk,
+          originalDef: selectedDM.def
+        }
+        setAiField({ ...aiField, monsters: newMonsters })
+        alert(`AI kích hoạt Dark Magic Curtain (Trả ${lpCost} LP) và triệu hồi ${selectedDM.name}!`)
+      }
     }
   }
 
@@ -2072,10 +2243,12 @@ function Duel() {
       setTimeout(() => {
         setActivatingSpell(null)
         // Remove from field and send to GY
-        const finalSpells = [...newSpells]
-        finalSpells[zoneIndex] = null
-        setField({ ...field, spells: finalSpells })
-        setGraveyard([...graveyard, card])
+        setField(prevField => {
+          const finalSpells = [...prevField.spells]
+          finalSpells[zoneIndex] = null
+          return { ...prevField, spells: finalSpells }
+        })
+        setGraveyard(prevGY => [...prevGY, card])
       }, 3000)
     } else {
       setTimeout(() => setActivatingSpell(null), 3000)
@@ -2336,10 +2509,9 @@ function Duel() {
           setDefenderField({ ...defenderField, monsters: newDefenderMonsters })
           
           // Damage to defender
-          if (isPlayerAttacking) {
-            animateLP('ai', damage)
-          } else {
-            animateLP('player', damage)
+          const target = isPlayerAttacking ? 'ai' : 'player'
+          if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
+            animateLP(target, damage)
           }
         } else if (atkDiff < 0) {
           // Defender wins
@@ -2353,10 +2525,9 @@ function Duel() {
           setAttackerField({ ...attackerField, monsters: newAttackerMonsters })
           
           // Damage to attacker
-          if (isPlayerAttacking) {
-            animateLP('player', damage)
-          } else {
-            animateLP('ai', damage)
+          const target = isPlayerAttacking ? 'player' : 'ai'
+          if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
+            animateLP(target, damage)
           }
         } else {
           // Draw - both destroyed
@@ -2393,10 +2564,9 @@ function Duel() {
           damage = Math.abs(atkVsDef)
           
           // Damage to attacker
-          if (isPlayerAttacking) {
-            animateLP('player', damage)
-          } else {
-            animateLP('ai', damage)
+          const target = isPlayerAttacking ? 'player' : 'ai'
+          if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
+            animateLP(target, damage)
           }
         } else {
           // No damage
@@ -2405,9 +2575,13 @@ function Duel() {
       }
     } else {
       // Attack face-down monster - flip it
+      const defenderOwner = isPlayerAttacking ? 'ai' : 'player'
       const newDefenderMonsters = [...defenderField.monsters]
       newDefenderMonsters[defender.index] = { ...defenderCard, faceUp: true }
       setDefenderField({ ...defenderField, monsters: newDefenderMonsters })
+      
+      // Trigger Flip Effect
+      handleFlipEffect(defenderCard, defender.index, defenderOwner)
       
       // Then calculate damage
       const atkVsDef = attackerCard.atk - defenderCard.def
@@ -2421,10 +2595,10 @@ function Duel() {
         battleLog = `Lật bài: ${defenderCard.name} (DEF ${defenderCard.def}) chặn được!`
         damage = Math.abs(atkVsDef)
         
-        if (isPlayerAttacking) {
-          animateLP('player', damage)
-        } else {
-          animateLP('ai', damage)
+        // Damage to attacker
+        const target = isPlayerAttacking ? 'player' : 'ai'
+        if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
+          animateLP(target, damage)
         }
       } else {
         battleLog = `Lật bài: ${defenderCard.name} - Không có damage!`
@@ -2490,10 +2664,10 @@ function Duel() {
     // Direct attack
     const damage = attackerCard.atk
     
-    if (isPlayerAttacking) {
-      animateLP('ai', damage)
-    } else {
-      animateLP('player', damage)
+    // Direct attack with hand trap check
+    const target = isPlayerAttacking ? 'ai' : 'player'
+    if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
+      animateLP(target, damage)
     }
 
     alert(`${attackerCard.name} tấn công trực tiếp! Damage: ${damage}`)
@@ -2741,6 +2915,38 @@ function Duel() {
         </div>
       )}
 
+      {/* Deck Selection Modal */}
+      {deckSelection.active && (
+        <div className="discard-modal" onClick={() => setDeckSelection({ ...deckSelection, active: false })}>
+          <div className="discard-content" onClick={(e) => e.stopPropagation()}>
+            <div className="discard-header">
+              <h2>Bộ Bài (Deck)</h2>
+              <p className="discard-instruction">{deckSelection.message}</p>
+            </div>
+            <div className="discard-cards-grid">
+              {deckSelection.list.map((card, i) => (
+                <div 
+                  key={i} 
+                  className="discard-card"
+                  onClick={() => deckSelection.onSelect(card)}
+                >
+                  <img src={card.image_url} alt={card.name} />
+                  <div className="discard-card-name">{card.name}</div>
+                </div>
+              ))}
+            </div>
+            <div className="discard-buttons">
+              <button 
+                className="discard-btn"
+                onClick={() => setDeckSelection({ ...deckSelection, active: false })}
+              >
+                Hủy bỏ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Target Selection Overlay */}
       {targetSelection.active && (
         <div className="target-selection-overlay">
@@ -2796,7 +3002,7 @@ function Duel() {
 
       {/* Opponent Hand (face down) - Top */}
       <div className="hand ai-hand">
-        {(currentTurn === 'player' ? aiHand : playerHand).map((card, i) => (
+        {aiHand.map((card, i) => (
           <div key={i} className="hand-card">
             <div className="card-back-small"></div>
           </div>
@@ -3013,7 +3219,7 @@ function Duel() {
 
       {/* Current Player Hand - Bottom */}
       <div className="hand player-hand">
-        {(currentTurn === 'player' ? playerHand : aiHand).map((card, i) => (
+        {playerHand.map((card, i) => (
           <div 
             key={i} 
             className={`hand-card ${selectedHandCard?.index === i ? 'selected-hand-card' : ''} ${fusionMode && card.type.includes('Monster') ? 'fusion-material-selectable' : ''} ${fusionMode && selectedFusionMaterials.some(m => m.id === `hand-${i}`) ? 'selected-fusion-material' : ''}`}
@@ -3022,7 +3228,10 @@ function Duel() {
             onClick={() => {
               if (fusionMode && card.type.includes('Monster')) {
                 handleFusionMaterialSelect(card, 'hand', i)
-              } else {
+              } else if (chainPrompt.active && chainPrompt.player === 'player' && card.name.toLowerCase().includes('kuriboh')) {
+                // Activate Kuriboh
+                handleActivateKuriboh(i)
+              } else if (currentTurn === 'player') {
                 handleHandCardClick(card, i)
               }
             }}
@@ -3248,23 +3457,48 @@ function Duel() {
             </div>
             
             {/* Change position option for monsters */}
-            {contextMenu.type === 'monster' && contextMenu.card.faceUp && contextMenu.isCurrentPlayer && !battlePhase && (
-              <button 
-                className="context-menu-item position"
-                onClick={() => {
-                  const field = currentTurn === 'player' ? playerField : aiField
-                  const setField = currentTurn === 'player' ? setPlayerField : setAiField
-                  const newMonsters = [...field.monsters]
-                  newMonsters[contextMenu.index] = {
-                    ...contextMenu.card,
-                    position: contextMenu.card.position === 'attack' ? 'defense' : 'attack'
-                  }
-                  setField({ ...field, monsters: newMonsters })
-                  setContextMenu(null)
-                }}
-              >
-                {contextMenu.card.position === 'attack' ? '🛡️ Chuyển sang Thế Thủ' : '⚔️ Chuyển sang Tấn Công'}
-              </button>
+            {contextMenu.type === 'monster' && contextMenu.isCurrentPlayer && !battlePhase && (
+              <>
+                {contextMenu.card.faceUp ? (
+                  <button 
+                    className="context-menu-item position"
+                    onClick={() => {
+                      const field = currentTurn === 'player' ? playerField : aiField
+                      const setField = currentTurn === 'player' ? setPlayerField : setAiField
+                      const newMonsters = [...field.monsters]
+                      newMonsters[contextMenu.index] = {
+                        ...contextMenu.card,
+                        position: contextMenu.card.position === 'attack' ? 'defense' : 'attack'
+                      }
+                      setField({ ...field, monsters: newMonsters })
+                      setContextMenu(null)
+                    }}
+                  >
+                    {contextMenu.card.position === 'attack' ? '🛡️ Chuyển sang Thế Thủ' : '⚔️ Chuyển sang Tấn Công'}
+                  </button>
+                ) : (
+                  // Flip Summon option for Face-down monsters
+                  <button 
+                    className="context-menu-item position"
+                    onClick={() => {
+                      const field = currentTurn === 'player' ? playerField : aiField
+                      const setField = currentTurn === 'player' ? setPlayerField : setAiField
+                      const newMonsters = [...field.monsters]
+                      const flippedCard = { ...contextMenu.card, faceUp: true, position: 'attack' }
+                      newMonsters[contextMenu.index] = flippedCard
+                      setField({ ...field, monsters: newMonsters })
+                      
+                      // Trigger Flip Effect
+                      handleFlipEffect(flippedCard, contextMenu.index, currentTurn)
+                      
+                      setContextMenu(null)
+                      alert(`Flip Summon: ${flippedCard.name}!`)
+                    }}
+                  >
+                    ⚔️ Lật Bài (Flip Summon)
+                  </button>
+                )}
+              </>
             )}
             
             {/* Activate option for set spell/trap */}
