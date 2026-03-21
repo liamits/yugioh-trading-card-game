@@ -152,9 +152,9 @@
 }
 
 .hand-card {
-  width: 90px;
-  height: 125px;
-  border-radius: 8px;
+  width: 75px;
+  height: 105px;
+  border-radius: 6px;
   overflow: hidden;
   cursor: grab;
   transition: all 0.3s ease;
@@ -216,11 +216,11 @@
 }
 
 .zone {
-  width: 80px;
-  height: 110px;
+  width: 70px;
+  height: 95px;
   background: rgba(255, 255, 255, 0.03);
   border: 2px solid rgba(138, 180, 248, 0.3);
-  border-radius: 8px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -343,8 +343,8 @@
 
 .monster-zone,
 .spell-trap-zone {
-  width: 85px;
-  height: 115px;
+  width: 75px;
+  height: 105px;
 }
 
 /* Battle Button */

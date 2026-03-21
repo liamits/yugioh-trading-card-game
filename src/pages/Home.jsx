@@ -74,6 +74,9 @@ function Home() {
           <button className="nav-play-btn" onClick={() => navigate('/game')}>
             ⚔️ CHƠI NGAY
           </button>
+          <button className="nav-online-btn" onClick={() => navigate('/lobby')}>
+            🌐 ĐẤU ONLINE
+          </button>
         </div>
       </nav>
 

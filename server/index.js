@@ -2,6 +2,8 @@ import express from 'express'
 import mongoose from 'mongoose'
 import cors from 'cors'
 import dotenv from 'dotenv'
+import { createServer } from 'http'
+import { Server } from 'socket.io'
 import characterRoutes from './routes/characters.js'
 import articleRoutes from './routes/articles.js'
 import authRoutes from './routes/auth.js'
@@ -15,6 +17,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config()
 
 const app = express()
+const httpServer = createServer(app)
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+})
 
 app.use(cors())
 app.use(express.json())
@@ -30,7 +39,7 @@ app.use('/api/upload', uploadRoutes)
 // Article routes
 app.use('/api/articles', articleRoutes)
 
-// Admin GET all articles (reusing the router but could be integrated)
+// Admin GET all articles
 app.get('/api/admin/articles', requireAuth, async (req, res) => {
   const { default: Article } = await import('./models/Article.js')
   try {
@@ -39,11 +48,67 @@ app.get('/api/admin/articles', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }) }
 })
 
+// Socket.io Room Management
+const rooms = new Map()
+
+io.on('connection', (socket) => {
+  console.log('👤 User connected:', socket.id)
+
+  socket.on('create-room', (userData) => {
+    const roomId = Math.floor(100000 + Math.random() * 900000).toString()
+    const roomData = {
+      id: roomId,
+      host: socket.id,
+      players: [{ id: socket.id, name: userData.name, avatar: userData.avatar }],
+      status: 'waiting'
+    }
+    rooms.set(roomId, roomData)
+    socket.join(roomId)
+    socket.emit('room-created', roomData)
+    console.log(`🏠 Room created: ${roomId} by ${userData.name}`)
+  })
+
+  socket.on('join-room', ({ roomId, userData }) => {
+    const room = rooms.get(roomId)
+    if (room) {
+      if (room.players.length < 2) {
+        room.players.push({ id: socket.id, name: userData.name, avatar: userData.avatar })
+        socket.join(roomId)
+        socket.emit('room-joined', room)
+        io.to(roomId).emit('player-joined', room)
+        console.log(`👤 ${userData.name} joined room: ${roomId}`)
+      } else {
+        socket.emit('error', 'Phòng đã đầy!')
+      }
+    } else {
+      socket.emit('error', 'Không tìm thấy phòng!')
+    }
+  })
+
+  socket.on('disconnect', () => {
+    console.log('👤 User disconnected:', socket.id)
+    // Clean up rooms if host leaves
+    for (const [roomId, room] of rooms.entries()) {
+      if (room.host === socket.id) {
+        io.to(roomId).emit('room-closed')
+        rooms.delete(roomId)
+        console.log(`🏠 Room closed: ${roomId}`)
+      } else {
+        const playerIndex = room.players.findIndex(p => p.id === socket.id)
+        if (playerIndex !== -1) {
+          room.players.splice(playerIndex, 1)
+          io.to(roomId).emit('player-left', room)
+        }
+      }
+    }
+  })
+})
+
 // MongoDB Connection
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log('✅ Connected to MongoDB')
-    app.listen(process.env.PORT, () => {
+    httpServer.listen(process.env.PORT, () => {
       console.log(`🚀 Server running on port ${process.env.PORT}`)
     })
   })

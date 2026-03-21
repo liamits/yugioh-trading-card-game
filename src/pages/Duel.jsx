@@ -291,13 +291,14 @@ function Duel() {
       return
     }
     
-    // Send selected cards to graveyard
-    const discardedCards = selectedDiscards.map(i => currentHand[i])
-    setGraveyard(prev => [...prev, ...discardedCards])
-    
-    // Remove from hand
-    const newHand = currentHand.filter((_, i) => !selectedDiscards.includes(i))
-    setCurrentHand(newHand)
+    // Use functional update to ensure we use latest hand state
+    setCurrentHand(prevHand => {
+      const discardedCards = selectedDiscards.map(i => prevHand[i])
+      setGraveyard(prevGY => [...prevGY, ...discardedCards])
+      
+      // Remove from hand
+      return prevHand.filter((_, i) => !selectedDiscards.includes(i))
+    })
     
     // Reset states
     setDiscardingCards(false)
@@ -546,8 +547,7 @@ function Duel() {
       setField({ ...field, spells: newSpells })
       
       // Remove from hand
-      const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
-      setHand(newHand)
+      setHand(prevHand => prevHand.filter((_, i) => i !== selectedHandCard.index))
       
       // Show activation
       setActivatingSpell(card)
@@ -576,10 +576,8 @@ function Duel() {
         applySpellEffect(card, isPlayerTurn)
       }
     } else {
-      // Normal/Quick-Play spells go to GY after activation
       // Remove from hand FIRST
-      const newHand = hand.filter((_, i) => i !== selectedHandCard.index)
-      setHand(newHand)
+      setHand(prevHand => prevHand.filter((_, i) => i !== selectedHandCard.index))
       
       // Send to GY immediately
       setGraveyard(prev => [...prev, card])
@@ -898,14 +896,17 @@ function Duel() {
     const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
     const setHand = isPlayerTurn ? setPlayerHand : setAiHand
     
-    if (deck.length >= amount) {
-      const drawnCards = deck.slice(0, amount)
-      setHand(prev => [...prev, ...drawnCards])
-      setDeck(prev => prev.slice(amount))
-      alert(`Rút ${amount} lá bài: ${drawnCards.map(c => c.name).join(', ')}`)
-    } else {
-      alert(`Không đủ bài trong deck để rút ${amount} lá!`)
-    }
+    setDeck(prevDeck => {
+      if (prevDeck.length >= amount) {
+        const drawnCards = prevDeck.slice(0, amount)
+        setHand(prevHand => [...prevHand, ...drawnCards])
+        alert(`Rút ${amount} lá bài: ${drawnCards.map(c => c.name).join(', ')}`)
+        return prevDeck.slice(amount)
+      } else {
+        alert(`Không đủ bài trong deck để rút ${amount} lá!`)
+        return prevDeck
+      }
+    })
   }
 
   const checkForHandTraps = (targetPlayer, damage, onProceed) => {
@@ -971,33 +972,36 @@ function Duel() {
 
 
   const handleDrawThenDiscard = (drawAmount, discardAmount, isPlayerTurn) => {
-    const deck = isPlayerTurn ? playerDeck : aiDeck
-    const hand = isPlayerTurn ? playerHand : aiHand
     const setDeck = isPlayerTurn ? setPlayerDeck : setAiDeck
     const setHand = isPlayerTurn ? setPlayerHand : setAiHand
     
-    if (deck.length >= drawAmount) {
-      const drawnCards = deck.slice(0, drawAmount)
-      const newHand = [...hand, ...drawnCards]
-      setHand(newHand)
-      setDeck(deck.slice(drawAmount))
-      
-      alert(`Rút ${drawAmount} lá bài, sau đó chọn ${discardAmount} lá để loại bỏ`)
-      
-      // Trigger discard selection
-      setForcedDiscard({ amount: discardAmount, reason: 'spell_effect' })
-      setDiscardingCards(true)
-      setSelectedDiscards([])
-    }
+    setDeck(prevDeck => {
+      if (prevDeck.length >= drawAmount) {
+        const drawnCards = prevDeck.slice(0, drawAmount)
+        setHand(prevHand => [...prevHand, ...drawnCards])
+        
+        alert(`Rút ${drawAmount} lá bài, sau đó chọn ${discardAmount} lá để loại bỏ`)
+        
+        // Trigger discard selection
+        setForcedDiscard({ amount: discardAmount, reason: 'spell_effect' })
+        setDiscardingCards(true)
+        setSelectedDiscards([])
+        
+        return prevDeck.slice(drawAmount)
+      } else {
+        alert(`Không đủ bài trong deck để rút ${drawAmount} lá!`)
+        return prevDeck
+      }
+    })
   }
 
   const handleDestroyAllMonsters = () => {
     const playerMonsters = playerField.monsters.filter(m => m !== null)
     const aiMonsters = aiField.monsters.filter(m => m !== null)
     
-    // Send all monsters to GY
-    setPlayerGraveyard([...playerGraveyard, ...playerMonsters])
-    setAiGraveyard([...aiGraveyard, ...aiMonsters])
+    // Send all monsters to GY using functional updates
+    setPlayerGraveyard(prev => [...prev, ...playerMonsters])
+    setAiGraveyard(prev => [...prev, ...aiMonsters])
     
     // Clear fields
     setPlayerField({ ...playerField, monsters: [null, null, null, null, null] })
@@ -1056,12 +1060,19 @@ function Duel() {
       return
     }
     
-    // Remove from appropriate GY
-    if (playerGY.some(m => m.id === monster.id)) { // Use some for object comparison
-      setPlayerGY(playerGY.filter(m => m.id !== monster.id))
-    } else {
-      setAiGY(aiGY.filter(m => m.id !== monster.id))
-    }
+    // Remove from appropriate GY using functional updates
+    setPlayerGY(prevGY => {
+      if (prevGY.some(m => m.id === monster.id)) {
+        return prevGY.filter(m => m.id !== monster.id)
+      }
+      return prevGY
+    })
+    setAiGY(prevGY => {
+      if (prevGY.some(m => m.id === monster.id)) {
+        return prevGY.filter(m => m.id !== monster.id)
+      }
+      return prevGY
+    })
     
     // Summon to field
     const newMonsters = [...field.monsters]
@@ -1655,9 +1666,6 @@ function Duel() {
     })
   }
 
-  const handleTimeSeal = (isPlayerTurn) => {
-    alert('Time Seal: Đối thủ bỏ qua Draw Phase tiếp theo! (Cần implement turn counter)')
-  }
 
   const handleChainDestruction = (isPlayerTurn) => {
     alert('Chain Destruction: Khi monster bị phá hủy, phá hủy tất cả copies trong hand/deck! (Cần implement chain system)')

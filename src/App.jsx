@@ -9,11 +9,12 @@ import CardSearch from './pages/CardSearch'
 import Admin from './pages/Admin'
 import Login from './pages/Login'
 import Article from './pages/Article'
+import Lobby from './pages/Lobby'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function App() {
   const location = useLocation()
-  const isDuelMode = ['/game', '/duel-loading', '/character-select', '/duel'].includes(location.pathname)
+  const isDuelMode = ['/game', '/duel-loading', '/character-select', '/duel', '/lobby'].includes(location.pathname)
 
   return (
     <>
@@ -28,6 +29,7 @@ function App() {
         <Route path="/duel-loading" element={<DuelModeLoading />} />
         <Route path="/character-select" element={<CharacterSelect />} />
         <Route path="/duel" element={<Duel />} />
+        <Route path="/lobby" element={<Lobby />} />
       </Routes>
     </>
   )
