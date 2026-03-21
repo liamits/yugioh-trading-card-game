@@ -63,6 +63,14 @@ function Duel() {
   const [dragonSummonMode, setDragonSummonMode] = useState(false)
   const [availableDragons, setAvailableDragons] = useState([])
   const [normalSummonUsed, setNormalSummonUsed] = useState(false)
+  const [targetSelection, setTargetSelection] = useState({
+    active: false,
+    type: null, // 'monster', 'spell', 'any'
+    source: null, // 'player', 'ai', 'any'
+    onSelect: null,
+    onCancel: null,
+    message: ''
+  })
 
   useEffect(() => {
     if (!player || !ai) {
@@ -1476,7 +1484,34 @@ function Duel() {
     setShowCardOptions(false)
   }
 
+  const handleCancelTargetSelection = () => {
+    if (targetSelection.onCancel) {
+      targetSelection.onCancel()
+    }
+    setTargetSelection({ ...targetSelection, active: false })
+  }
+
   const handleCardClick = (card, type, index, isCurrentPlayer) => {
+    // If target selection is active
+    if (targetSelection.active) {
+      const { type: targetType, source: targetSource, onSelect } = targetSelection
+      
+      // Check if source matches
+      const sourceOwner = isCurrentPlayer ? (currentTurn === 'player' ? 'player' : 'ai') : (currentTurn === 'player' ? 'ai' : 'player')
+      const sourceMatches = targetSource === 'any' || targetSource === sourceOwner
+      
+      // Check if type matches
+      const typeMatches = targetType === 'any' || targetType === type
+      
+      if (sourceMatches && typeMatches) {
+        onSelect(card, type, index, sourceOwner)
+        setTargetSelection({ ...targetSelection, active: false })
+      } else {
+        alert(`Mục tiêu không hợp lệ! Yêu cầu: ${targetType} từ ${targetSource}`)
+      }
+      return
+    }
+
     // Close context menu if open
     setContextMenu(null)
 
@@ -1936,7 +1971,7 @@ function Duel() {
   }
 
   return (
-    <div className="duel-field">
+    <div className={`duel-field ${targetSelection.active ? 'target-selection-active' : ''}`}>
       {/* Game Over Modal */}
       {gameOver && (
         <div className="game-over-modal">
@@ -2052,6 +2087,23 @@ function Duel() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Target Selection Overlay */}
+      {targetSelection.active && (
+        <div className="target-selection-overlay">
+          <div className="target-selection-content">
+            <div className="target-selection-pulse"></div>
+            <h3>🎯 Chọn mục tiêu</h3>
+            <p>{targetSelection.message}</p>
+            <button 
+              className="target-cancel-btn"
+              onClick={handleCancelTargetSelection}
+            >
+              Hủy chọn
+            </button>
           </div>
         </div>
       )}
