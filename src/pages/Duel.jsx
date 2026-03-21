@@ -3308,6 +3308,9 @@ function Duel() {
                 className={`zone spell-trap-zone ${selectingZone && (selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap')) ? 'zone-selectable' : ''} ${card && !card.faceUp ? 'has-set-card' : ''} ${chainPrompt.active && chainPrompt.player === currentTurn && card && !card.faceUp ? 'chain-target' : ''}`}
                 onClick={() => {
                   if (chainPrompt.active && chainPrompt.player === currentTurn && card && !card.faceUp) {
+                    if (isMultiplayer && roomId) {
+                      socket.emit('chain-response', { roomId, response: 'yes' })
+                    }
                     activateSetCard(card, i, currentTurn)
                   } else if (selectingZone && !card && (selectedHandCard?.card.type.includes('Spell') || selectedHandCard?.card.type.includes('Trap'))) {
                     handleZoneSelect(i, 'spell')
