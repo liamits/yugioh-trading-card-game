@@ -355,24 +355,112 @@ function Duel() {
   }
 
   const aiActionSpells = () => {
-    return new Promise((resolve) => {
-      // Find Pot of Greed or Graceful Charity
+    return new Promise(async (resolve) => {
+      // 1. Pot of Greed / Graceful Charity
       const potIndex = aiHand.findIndex(c => c.name === 'Pot of Greed')
       if (potIndex !== -1) {
         const card = aiHand[potIndex]
         console.log("AI activating Pot of Greed")
-        // Implementation of Pot of Greed for AI
         setAiHand(prev => prev.filter((_, i) => i !== potIndex))
         setAiGraveyard(prev => [...prev, card])
-        // Draw 2
         if (aiDeck.length >= 2) {
           const drawn = aiDeck.slice(0, 2)
           setAiHand(prev => [...prev, ...drawn])
           setAiDeck(prev => prev.slice(2))
         }
+        await new Promise(r => setTimeout(r, 1000))
       }
+
+      // 2. Raigeki / Dark Hole
+      const raigekiIndex = aiHand.findIndex(c => c.name === 'Raigeki')
+      const darkHoleIndex = aiHand.findIndex(c => c.name === 'Dark Hole')
       
-      // Set Traps
+      if (raigekiIndex !== -1 && playerField.monsters.some(m => m !== null)) {
+        const card = aiHand[raigekiIndex]
+        console.log("AI activating Raigeki")
+        setAiHand(prev => prev.filter((_, i) => i !== raigekiIndex))
+        setAiGraveyard(prev => [...prev, card])
+        // Destroy all player monsters
+        const destroyed = playerField.monsters.filter(m => m !== null)
+        setPlayerGraveyard(prev => [...prev, ...destroyed])
+        setPlayerField(prev => ({ ...prev, monsters: new Array(5).fill(null) }))
+        await new Promise(r => setTimeout(r, 1000))
+      } else if (darkHoleIndex !== -1 && (playerField.monsters.some(m => m !== null) || aiField.monsters.some(m => m !== null))) {
+        // AI uses Dark Hole if player has more monsters
+        const pCount = playerField.monsters.filter(m => m !== null).length
+        const aCount = aiField.monsters.filter(m => m !== null).length
+        if (pCount >= aCount) {
+          const card = aiHand[darkHoleIndex]
+          console.log("AI activating Dark Hole")
+          setAiHand(prev => prev.filter((_, i) => i !== darkHoleIndex))
+          setAiGraveyard(prev => [...prev, card])
+          // Destroy all monsters
+          const pDestroyed = playerField.monsters.filter(m => m !== null)
+          const aDestroyed = aiField.monsters.filter(m => m !== null)
+          setPlayerGraveyard(prev => [...prev, ...pDestroyed])
+          setAiGraveyard(prev => [...prev, ...aDestroyed])
+          setPlayerField(prev => ({ ...prev, monsters: new Array(5).fill(null) }))
+          setAiField(prev => ({ ...prev, monsters: new Array(5).fill(null) }))
+          await new Promise(r => setTimeout(r, 1000))
+        }
+      }
+
+      // 3. Change of Heart
+      const cohIndex = aiHand.findIndex(c => c.name === 'Change of Heart')
+      const emptyAiZone = aiField.monsters.findIndex(m => m === null)
+      const pMonsters = playerField.monsters.map((m, i) => m ? { card: m, index: i } : null).filter(m => m !== null)
+      
+      if (cohIndex !== -1 && emptyAiZone !== -1 && pMonsters.length > 0) {
+        const card = aiHand[cohIndex]
+        // Pick strongest player monster
+        const target = pMonsters.sort((a, b) => b.card.atk - a.card.atk)[0]
+        console.log(`AI activating Change of Heart on ${target.card.name}`)
+        
+        setAiHand(prev => prev.filter((_, i) => i !== cohIndex))
+        setAiGraveyard(prev => [...prev, card])
+        
+        // Take control
+        setPlayerField(prev => {
+          const newMonsters = [...prev.monsters]
+          newMonsters[target.index] = null
+          return { ...prev, monsters: newMonsters }
+        })
+        setAiField(prev => {
+          const newMonsters = [...prev.monsters]
+          newMonsters[emptyAiZone] = { ...target.card, returnAtEndTurn: true, originalOwner: 'player' }
+          return { ...prev, monsters: newMonsters }
+        })
+        await new Promise(r => setTimeout(r, 1000))
+      }
+
+      // 4. Monster Reborn
+      const rebornIndex = aiHand.findIndex(c => c.name === 'Monster Reborn')
+      const aiGYMonsters = aiGraveyard.filter(c => c.type.includes('Monster'))
+      const aiEmptyZone = aiField.monsters.findIndex(m => m === null)
+
+      if (rebornIndex !== -1 && aiEmptyZone !== -1 && aiGYMonsters.length > 0) {
+        const card = aiHand[rebornIndex]
+        const target = aiGYMonsters.sort((a, b) => b.atk - a.atk)[0]
+        console.log(`AI activating Monster Reborn on ${target.name}`)
+        
+        setAiHand(prev => prev.filter((_, i) => i !== rebornIndex))
+        setAiGraveyard(prev => {
+          const newGY = [...prev]
+          newGY.push(card)
+          const targetInGY = newGY.findIndex(c => c === target)
+          if (targetInGY !== -1) newGY.splice(targetInGY, 1)
+          return newGY
+        })
+        
+        setAiField(prev => {
+          const newMonsters = [...prev.monsters]
+          newMonsters[aiEmptyZone] = { ...target, faceUp: true, position: 'attack' }
+          return { ...prev, monsters: newMonsters }
+        })
+        await new Promise(r => setTimeout(r, 1000))
+      }
+
+      // 5. Set remaining Traps
       const trapIndex = aiHand.findIndex(c => c.type.includes('Trap'))
       const emptySpellZone = aiField.spells.findIndex(s => s === null)
       if (trapIndex !== -1 && emptySpellZone !== -1) {
@@ -383,9 +471,11 @@ function Duel() {
           newSpells[emptySpellZone] = { ...card, faceUp: false, canActivate: false }
           return { ...prev, spells: newSpells }
         })
+        console.log(`AI Set ${card.name}`)
+        await new Promise(r => setTimeout(r, 500))
       }
 
-      setTimeout(resolve, 1000)
+      setTimeout(resolve, 500)
     })
   }
 
