@@ -2780,3 +2780,26 @@
   filter: brightness(1.2);
   box-shadow: 0 0 20px #8ab4f8;
 }
+
+.stat-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.original-stat {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-weight: normal;
+}
+
+.stat-value.buffed {
+  color: #51cf66;
+  text-shadow: 0 0 10px rgba(81, 207, 102, 0.5);
+}
+
+.stat-value.debuffed {
+  color: #ff8787;
+  text-shadow: 0 0 10px rgba(255, 135, 135, 0.5);
+}

@@ -376,7 +376,9 @@ function Duel() {
         newMonsters[zoneIndex] = {
           ...card,
           faceUp: true,
-          position: 'attack'
+          position: 'attack',
+          originalAtk: card.atk,
+          originalDef: card.def
         }
         // Mark normal summon as used
         setNormalSummonUsed(true)
@@ -385,7 +387,9 @@ function Duel() {
         newMonsters[zoneIndex] = {
           ...card,
           faceUp: true,
-          position: 'defense'
+          position: 'defense',
+          originalAtk: card.atk,
+          originalDef: card.def
         }
         // Mark normal summon as used
         setNormalSummonUsed(true)
@@ -394,7 +398,9 @@ function Duel() {
         newMonsters[zoneIndex] = {
           ...card,
           faceUp: false,
-          position: 'defense'
+          position: 'defense',
+          originalAtk: card.atk,
+          originalDef: card.def
         }
         // Mark normal summon as used (set counts as normal summon)
         setNormalSummonUsed(true)
@@ -712,7 +718,7 @@ function Duel() {
     }
     
     // Remove from appropriate GY
-    if (playerGY.includes(monster)) {
+    if (playerGY.some(m => m.id === monster.id)) { // Use some for object comparison
       setPlayerGY(playerGY.filter(m => m.id !== monster.id))
     } else {
       setAiGY(aiGY.filter(m => m.id !== monster.id))
@@ -724,7 +730,9 @@ function Duel() {
       ...monster,
       faceUp: true,
       position: 'attack',
-      justSummoned: true
+      justSummoned: true,
+      originalAtk: monster.atk,
+      originalDef: monster.def
     }
     setField({ ...field, monsters: newMonsters })
     
@@ -798,7 +806,9 @@ function Duel() {
       ...dragon,
       faceUp: true,
       position: 'attack',
-      justSummoned: true
+      justSummoned: true,
+      originalAtk: dragon.atk,
+      originalDef: dragon.def
     }
     setField({ ...field, monsters: newMonsters })
     
@@ -808,8 +818,46 @@ function Duel() {
   }
 
   const handleMegamorph = (isPlayerTurn) => {
-    // This would need target selection for equip
-    alert('Megamorph: Chọn 1 monster để trang bị! (Cần implement target selection)')
+    setTargetSelection({
+      active: true,
+      type: 'monster',
+      source: 'any',
+      message: 'Chọn 1 quái thú để trang bị Megamorph',
+      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+        const myLP = isPlayerTurn ? playerLP : aiLP
+        const oppLP = isPlayerTurn ? aiLP : playerLP
+        
+        const field = targetOwner === 'player' ? playerField : aiField
+        const setField = targetOwner === 'player' ? setPlayerField : setAiField
+        
+        const newMonsters = [...field.monsters]
+        const monster = newMonsters[targetIndex]
+        
+        let newAtk = monster.originalAtk
+        let buffType = ''
+        
+        if (myLP < oppLP) {
+          newAtk = monster.originalAtk * 2
+          buffType = 'buffed'
+          alert(`${monster.name} được gấp đôi ATK! (${monster.originalAtk} -> ${newAtk})`)
+        } else if (myLP > oppLP) {
+          newAtk = Math.floor(monster.originalAtk / 2)
+          buffType = 'debuffed'
+          alert(`${monster.name} bị chia đôi ATK! (${monster.originalAtk} -> ${newAtk})`)
+        } else {
+          alert('LP bằng nhau, Megamorph không có tác dụng!')
+          return
+        }
+        
+        newMonsters[targetIndex] = {
+          ...monster,
+          atk: newAtk,
+          buffType: buffType
+        }
+        
+        setField({ ...field, monsters: newMonsters })
+      }
+    })
   }
 
   const handleCrushCardVirus = (isPlayerTurn) => {
@@ -856,7 +904,31 @@ function Duel() {
   }
 
   const handleShadowSpell = (isPlayerTurn) => {
-    alert('Shadow Spell: Chọn 1 monster để trang bị! Monster đó sẽ mất 700 ATK. (Cần implement target selection)')
+    setTargetSelection({
+      active: true,
+      type: 'monster',
+      source: isPlayerTurn ? 'ai' : 'player',
+      message: 'Chọn 1 quái thú của đối thủ cho Shadow Spell',
+      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+        const field = targetOwner === 'player' ? playerField : aiField
+        const setField = targetOwner === 'player' ? setPlayerField : setAiField
+        
+        const newMonsters = [...field.monsters]
+        const monster = newMonsters[targetIndex]
+        
+        const newAtk = Math.max(0, (monster.atk || 0) - 700)
+        
+        newMonsters[targetIndex] = {
+          ...monster,
+          atk: newAtk,
+          buffType: 'debuffed',
+          cannotAttack: true
+        }
+        
+        setField({ ...field, monsters: newMonsters })
+        alert(`${monster.name} bị khóa bởi Shadow Spell! (ATK -700 và không thể tấn công)`)
+      }
+    })
   }
 
   const handleNegateAttack = (isPlayerTurn) => {
@@ -892,7 +964,9 @@ function Duel() {
             ...darkMagician,
             faceUp: true,
             position: 'attack',
-            justSummoned: true
+            justSummoned: true,
+            originalAtk: darkMagician.atk,
+            originalDef: darkMagician.def
           }
           setField({ ...field, monsters: newMonsters })
           alert(`Dark Magic Curtain: Trả ${lpCost} LP, triệu hồi ${darkMagician.name}!`)
@@ -938,7 +1012,9 @@ function Duel() {
           ...darkMagicianOfChaos,
           faceUp: true,
           position: 'attack',
-          justSummoned: true
+          justSummoned: true,
+          originalAtk: darkMagicianOfChaos.atk,
+          originalDef: darkMagicianOfChaos.def
         }
         setField({ ...field, monsters: newMonsters })
         alert(`Dedication through Light and Darkness: Hiến tế Dark Magician, triệu hồi ${darkMagicianOfChaos.name}!`)
@@ -1017,7 +1093,9 @@ function Duel() {
           def: 200,
           faceUp: true,
           position: 'defense',
-          isToken: true
+          isToken: true,
+          originalAtk: 300,
+          originalDef: 200
         }
         tokensCreated++
       }
@@ -1083,7 +1161,9 @@ function Duel() {
           name: 'Magical Hat Token',
           type: 'Token',
           faceUp: false,
-          isToken: true
+          isToken: true,
+          originalAtk: 0,
+          originalDef: 0
         }
         hatsCreated++
       }
@@ -1130,7 +1210,31 @@ function Duel() {
   }
 
   const handleSpellbindingCircle = (isPlayerTurn) => {
-    alert('Spellbinding Circle: Chọn 1 monster để trang bị! Monster đó mất 700 ATK và không thể tấn công. (Cần implement target selection)')
+    setTargetSelection({
+      active: true,
+      type: 'monster',
+      source: isPlayerTurn ? 'ai' : 'player',
+      message: 'Chọn 1 quái thú của đối thủ cho Spellbinding Circle',
+      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+        const field = targetOwner === 'player' ? playerField : aiField
+        const setField = targetOwner === 'player' ? setPlayerField : setAiField
+        
+        const newMonsters = [...field.monsters]
+        const monster = newMonsters[targetIndex]
+        
+        const newAtk = Math.max(0, (monster.atk || 0) - 700)
+        
+        newMonsters[targetIndex] = {
+          ...monster,
+          atk: newAtk,
+          buffType: 'debuffed',
+          cannotAttack: true
+        }
+        
+        setField({ ...field, monsters: newMonsters })
+        alert(`${monster.name} bị khóa bởi Spellbinding Circle! (ATK -700 và không thể tấn công)`)
+      }
+    })
   }
 
   const handleTimeSeal = (isPlayerTurn) => {
@@ -1402,7 +1506,9 @@ function Duel() {
       ...selectedFusionMonster.monster,
       faceUp: true,
       position: 'attack',
-      justSummoned: true
+      justSummoned: true,
+      originalAtk: selectedFusionMonster.monster.atk,
+      originalDef: selectedFusionMonster.monster.def
     }
     
     setField(newField)
@@ -1717,7 +1823,9 @@ function Duel() {
         ...tributeCard.card,
         faceUp: shouldBeFaceUp,
         position: shouldBeFaceUp ? 'attack' : 'defense',
-        justSummoned: true
+        justSummoned: true,
+        originalAtk: tributeCard.card.atk,
+        originalDef: tributeCard.card.def
       }
 
       setField({ ...field, monsters: newMonsters })
@@ -1758,6 +1866,10 @@ function Duel() {
   }
 
   const handleBattle = (attacker, defender) => {
+    if (attacker.card.cannotAttack) {
+      alert(`${attacker.card.name} không thể tấn công do ảnh hưởng của hiệu ứng!`)
+      return
+    }
     const attackerCard = attacker.card
     const defenderCard = defender.card
 
@@ -2216,7 +2328,7 @@ function Duel() {
               >
                 {card ? (
                   card.faceUp ? (
-                    <div className="monster-card-container">
+                    <div className={`monster-card-container ${card.buffType || ''}`}>
                       <img 
                         src={card.image_url} 
                         alt={card.name}
@@ -2258,7 +2370,7 @@ function Duel() {
               >
                 {card ? (
                   card.faceUp ? (
-                    <div className="monster-card-container">
+                    <div className={`monster-card-container ${card.buffType || ''}`}>
                       <img 
                         src={card.image_url} 
                         alt={card.name}
@@ -2724,8 +2836,20 @@ function Duel() {
               </div>
               {hoveredCard.atk !== undefined && (
                 <div className="card-atk-def">
-                  <span>ATK: {hoveredCard.atk}</span>
-                  <span>DEF: {hoveredCard.def}</span>
+                  <div className="stat-group">
+                    <span className="stat-label">ATK:</span>
+                    <span className={`stat-value ${hoveredCard.buffType || ''}`}>{hoveredCard.atk}</span>
+                    {hoveredCard.originalAtk !== undefined && hoveredCard.atk !== hoveredCard.originalAtk && (
+                      <span className="original-stat"> (Gốc: {hoveredCard.originalAtk})</span>
+                    )}
+                  </div>
+                  <div className="stat-group">
+                    <span className="stat-label">DEF:</span>
+                    <span className="stat-value">{hoveredCard.def}</span>
+                    {hoveredCard.originalDef !== undefined && hoveredCard.def !== hoveredCard.originalDef && (
+                      <span className="original-stat"> (Gốc: {hoveredCard.originalDef})</span>
+                    )}
+                  </div>
                 </div>
               )}
               <div className="card-description">
