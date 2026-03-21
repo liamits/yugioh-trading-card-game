@@ -92,6 +92,8 @@ function Duel() {
     message: ''
   })
   
+  const [duelTurnCount, setDuelTurnCount] = useState(1)
+  
   // Chain System States
   const [chainStack, setChainStack] = useState([])
   const [chainPrompt, setChainPrompt] = useState({
@@ -493,7 +495,8 @@ function Duel() {
         .map((m, i) => m ? { card: m, index: i } : null)
         .filter(m => m !== null && m.card.position === 'attack')
       
-      if (aiMonsters.length === 0) {
+      if (aiMonsters.length === 0 || duelTurnCount === 1) {
+        if (duelTurnCount === 1) console.log("AI cannot attack on Turn 1")
         setTimeout(resolve, 1000)
         return
       }
@@ -674,6 +677,7 @@ function Duel() {
     }
     
     setCurrentTurn(nextTurn)
+    setDuelTurnCount(prev => prev + 1)
     setNormalSummonUsed(false)
     
     // Draw a card for the next player using functional updates
