@@ -258,6 +258,131 @@ function Duel() {
     }
   }, [playerLP, aiLP])
 
+  // AI Turn Logic
+  useEffect(() => {
+    if (!isMultiplayer && currentTurn === 'ai' && !gameOver) {
+      const timer = setTimeout(() => {
+        handleAiTurn()
+      }, 1500)
+      return () => clearTimeout(timer)
+    }
+  }, [currentTurn, isMultiplayer, gameOver])
+
+  const handleAiTurn = async () => {
+    console.log("AI is thinking...")
+    
+    // 1. Main Phase 1: Summoning
+    await aiActionSummon()
+    
+    // 2. Main Phase 1: Activate/Set Spells/Traps
+    await aiActionSpells()
+    
+    // 3. Battle Phase
+    await aiActionBattle()
+    
+    // 4. End Turn
+    setTimeout(() => {
+      proceedEndTurn()
+    }, 1000)
+  }
+
+  const aiActionSummon = () => {
+    return new Promise((resolve) => {
+      // Find a monster in hand that's level 1-4
+      const monsterIndex = aiHand.findIndex(c => c.type.includes('Monster') && (c.level || 0) <= 4)
+      const emptyZoneIndex = aiField.monsters.findIndex(m => m === null)
+
+      if (monsterIndex !== -1 && emptyZoneIndex !== -1 && !normalSummonUsed) {
+        const card = aiHand[monsterIndex]
+        
+        // Update states
+        setAiHand(prev => prev.filter((_, i) => i !== monsterIndex))
+        setAiField(prev => {
+          const newMonsters = [...prev.monsters]
+          newMonsters[emptyZoneIndex] = { ...card, faceUp: true, position: 'attack', justSummoned: true }
+          return { ...prev, monsters: newMonsters }
+        })
+        setNormalSummonUsed(true)
+        console.log(`AI Summoned ${card.name}`)
+      }
+      
+      setTimeout(resolve, 1000)
+    })
+  }
+
+  const aiActionSpells = () => {
+    return new Promise((resolve) => {
+      // Find Pot of Greed or Graceful Charity
+      const potIndex = aiHand.findIndex(c => c.name === 'Pot of Greed')
+      if (potIndex !== -1) {
+        const card = aiHand[potIndex]
+        console.log("AI activating Pot of Greed")
+        // Implementation of Pot of Greed for AI
+        setAiHand(prev => prev.filter((_, i) => i !== potIndex))
+        setAiGraveyard(prev => [...prev, card])
+        // Draw 2
+        if (aiDeck.length >= 2) {
+          const drawn = aiDeck.slice(0, 2)
+          setAiHand(prev => [...prev, ...drawn])
+          setAiDeck(prev => prev.slice(2))
+        }
+      }
+      
+      // Set Traps
+      const trapIndex = aiHand.findIndex(c => c.type.includes('Trap'))
+      const emptySpellZone = aiField.spells.findIndex(s => s === null)
+      if (trapIndex !== -1 && emptySpellZone !== -1) {
+        const card = aiHand[trapIndex]
+        setAiHand(prev => prev.filter((_, i) => i !== trapIndex))
+        setAiField(prev => {
+          const newSpells = [...prev.spells]
+          newSpells[emptySpellZone] = { ...card, faceUp: false, canActivate: false }
+          return { ...prev, spells: newSpells }
+        })
+      }
+
+      setTimeout(resolve, 1000)
+    })
+  }
+
+  const aiActionBattle = () => {
+    return new Promise((resolve) => {
+      setBattlePhase(true)
+      
+      const aiMonsters = aiField.monsters.map((m, i) => m ? { ...m, index: i } : null).filter(m => m !== null)
+      
+      if (aiMonsters.length === 0) {
+        setTimeout(resolve, 1000)
+        return
+      }
+
+      // Simple attack logic: try to attack anything if possible
+      // In a real duel, we'd need to call handleAttack or similar
+      // For now, let's just use a simple direct attack if player has no monsters
+      const playerMonsters = playerField.monsters.filter(m => m !== null)
+      
+      if (playerMonsters.length === 0) {
+        // Direct attack with all monsters
+        let totalDamage = 0
+        aiMonsters.forEach(m => {
+          totalDamage += m.atk
+        })
+        
+        if (totalDamage > 0) {
+          setTimeout(() => {
+            setPlayerLP(prev => Math.max(0, prev - totalDamage))
+            console.log(`AI attacked directly for ${totalDamage}`)
+          }, 500)
+        }
+      }
+      
+      setTimeout(() => {
+        setBattlePhase(false)
+        resolve()
+      }, 2000)
+    })
+  }
+
   const handleCoinChoice = (choice) => {
     setPlayerChoice(choice)
     setCoinFlipping(true)
