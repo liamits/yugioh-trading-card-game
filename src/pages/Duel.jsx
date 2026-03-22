@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import io from 'socket.io-client'
+import { executeEffect } from '../logic/CardEffectProcessor'
 import './Duel.css'
 
 const socket = io('http://localhost:5000')
@@ -279,6 +280,42 @@ function Duel() {
     }
   }, [playerLP, aiLP])
 
+  useEffect(() => {
+    if (gameOver && !isMultiplayer) {
+      const updateProgress = async () => {
+        try {
+          const token = localStorage.getItem('token')
+          if (!token) return
+
+          const expGained = winner === 'player' ? 100 : 20
+          const goldGained = winner === 'player' ? 50 : 10
+
+          const response = await fetch('http://localhost:5000/api/users/progress', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              expGained,
+              goldGained,
+              win: winner === 'player'
+            })
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            console.log('Progress updated:', data)
+            if (data.leveledUp) alert(`Chúc mừng! Bạn đã lên Level ${data.level}!`)
+          }
+        } catch (err) {
+          console.error('Failed to update progress:', err)
+        }
+      }
+      updateProgress()
+    }
+  }, [gameOver, winner, isMultiplayer])
+
   // AI Turn Logic
   useEffect(() => {
     if (!isMultiplayer && currentTurn === 'ai' && !gameOver) {
@@ -443,13 +480,12 @@ function Duel() {
         aiHandRef.current = newHand
         
         setAiGraveyard(prev => [...prev, card])
-        // Destroy all player monsters
-        const destroyed = playerFieldRef.current.monsters.filter(m => m !== null)
-        setPlayerGraveyard(prev => [...prev, ...destroyed])
-        setPlayerField(prev => {
-          const next = { ...prev, monsters: new Array(5).fill(null) }
-          playerFieldRef.current = next
-          return next
+        executeEffect(card, { 
+          isPlayerTurn: false,
+          playerField: playerFieldRef.current, setPlayerField,
+          aiField: aiFieldRef.current, setAiField,
+          playerGraveyard: playerGraveyardRef.current, setPlayerGraveyard,
+          aiGraveyard: aiGraveyardRef.current, setAiGraveyard
         })
         await new Promise(r => setTimeout(r, 1000))
       } else if (darkHoleIndex !== -1 && (playerFieldRef.current.monsters.some(m => m !== null) || aiFieldRef.current.monsters.some(m => m !== null))) {

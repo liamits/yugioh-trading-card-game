@@ -200,55 +200,64 @@ const characters = [
     name: "Yugi Muto",
     description: "The King of Games, master of the Dark Magician",
     avatar: "/image/yugimuto_pfp.webp",
-    deck: yugiDeck
+    deck: yugiDeck,
+    difficulty: 5
   },
   {
     name: "Yami Yugi",
     description: "The Pharaoh's spirit, wielder of the Egyptian God Cards",
     avatar: "/image/yamiyugi_pfp.webp",
-    deck: yamiYugiDeck
+    deck: yamiYugiDeck,
+    difficulty: 5
   },
   {
     name: "Kaiba",
     description: "CEO of Kaiba Corp, master of the Blue-Eyes White Dragon",
     avatar: "/image/setokaiba_pfp.webp",
-    deck: kaibaDeck
+    deck: kaibaDeck,
+    difficulty: 5
   },
   {
     name: "Joey",
     description: "The underdog duelist with a heart of gold and Red-Eyes Black Dragon",
     avatar: "/image/joey_pfp.webp",
-    deck: joeyDeck
+    deck: joeyDeck,
+    difficulty: 4
   },
   {
     name: "Mai",
     description: "The elegant duelist who commands the Harpie Ladies",
     avatar: "/image/mai_pfp.webp",
-    deck: maiDeck
+    deck: maiDeck,
+    difficulty: 4
   },
   {
     name: "Pegasus",
     description: "Creator of Duel Monsters and master of Toon cards",
     avatar: "/image/pegasus_pfp.webp",
-    deck: pegasusDeck
+    deck: pegasusDeck,
+    difficulty: 3
   },
   {
     name: "Yami Bakura",
     description: "The dark spirit wielding occult and fiend monsters",
     avatar: "/image/bakura_pfp.webp",
-    deck: bakuraDeck
+    deck: bakuraDeck,
+    difficulty: 4
   },
   {
     name: "Yami Marik",
     description: "The evil alter ego commanding the Egyptian God Card Ra",
     avatar: "/image/marik_pfp.webp",
-    deck: marikDeck
+    deck: marikDeck,
+    difficulty: 5
   },
   {
     name: "Ishizu",
     description: "Guardian of the Millennium Necklace with mystical powers",
     avatar: "/image/ishuzu_pfp.webp",
-    deck: ishizuDeck
+    deck: ishizuDeck,
+    difficulty: 3
   }
 ]
 

@@ -7,6 +7,7 @@ import { Server } from 'socket.io'
 import characterRoutes from './routes/characters.js'
 import articleRoutes from './routes/articles.js'
 import authRoutes from './routes/auth.js'
+import userRoutes from './routes/users.js'
 import uploadRoutes from './routes/upload.js'
 import { requireAuth } from './middleware/auth.js'
 import { fileURLToPath } from 'url'
@@ -33,6 +34,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')))
 
 // Public routes
 app.use('/api/auth', authRoutes)
+app.use('/api/users', userRoutes)
 app.use('/api/characters', characterRoutes)
 app.use('/api/upload', uploadRoutes)
 

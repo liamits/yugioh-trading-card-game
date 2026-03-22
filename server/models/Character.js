@@ -35,6 +35,12 @@ const characterSchema = new mongoose.Schema({
     wins: { type: Number, default: 0 },
     losses: { type: Number, default: 0 },
     totalDuels: { type: Number, default: 0 }
+  },
+  difficulty: {
+    type: Number,
+    min: 1,
+    max: 5,
+    default: 1
   }
 }, {
   timestamps: true
