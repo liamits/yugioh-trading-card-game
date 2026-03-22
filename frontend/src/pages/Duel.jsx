@@ -637,6 +637,24 @@ function Duel() {
         }
       }
 
+      // 4.5 Megamorph (Kaiba Special)
+      const megaIndex = aiHandRef.current.findIndex(c => c.name === 'Megamorph')
+      if (megaIndex !== -1) {
+        const myLP = aiLP
+        const oppLP = playerLP
+        const aiMonsters = aiFieldRef.current.monsters.filter(m => m !== null)
+        const pMonsters = playerFieldRef.current.monsters.filter(m => m !== null)
+
+        if ((myLP < oppLP && aiMonsters.length > 0) || (myLP > oppLP && pMonsters.length > 0)) {
+          const card = aiHandRef.current[megaIndex]
+          setAiHand(prev => prev.filter((_, i) => i !== megaIndex))
+          aiHandRef.current = aiHandRef.current.filter((_, i) => i !== megaIndex)
+          setAiGraveyard(prev => [...prev, card])
+          handleMegamorph(false) // Trigger AI logic for Megamorph
+          await new Promise(r => setTimeout(r, 1000))
+        }
+      }
+
       // 5. Set remaining Traps
       const trapIndex = aiHandRef.current.findIndex(c => c.type.includes('Trap'))
       const emptySpellZone = aiFieldRef.current.spells.findIndex(s => s === null)
@@ -1779,6 +1797,24 @@ function Duel() {
         setTimeout(() => handleActivateKuriboh(kuribohIndex, 'ai'), 1000)
         return
       }
+
+      // Ring of Destruction
+      const ringIndex = setSpells.findIndex(s => s.card.name === 'Ring of Destruction')
+      if (ringIndex !== -1) {
+        console.log("AI chaining Ring of Destruction")
+        const ringObj = setSpells[ringIndex]
+        setTimeout(() => {
+          handleRingOfDestruction(false)
+          // Mark as used
+          setAiField(prev => {
+            const next = { ...prev, spells: prev.spells.map((s, idx) => idx === ringObj.index ? null : s) }
+            aiFieldRef.current = next
+            return next
+          })
+          setAiGraveyard(prev => [...prev, ringObj.card])
+        }, 1000)
+        return
+      }
     }
 
     // 2. Check for Spell Activation Responses (Seven Tools of the Bandit for Traps, but here we cover spells)
@@ -1985,48 +2021,6 @@ function Duel() {
     setAvailableDragons([])
   }
 
-  const handleMegamorph = (isPlayerTurn) => {
-    setTargetSelection({
-      active: true,
-      type: 'monster',
-      source: 'any',
-      message: 'Chọn 1 quái thú để trang bị Megamorph',
-      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
-        const myLP = isPlayerTurn ? playerLP : aiLP
-        const oppLP = isPlayerTurn ? aiLP : playerLP
-        
-        const field = targetOwner === 'player' ? playerField : aiField
-        const setField = targetOwner === 'player' ? setPlayerField : setAiField
-        
-        const newMonsters = [...field.monsters]
-        const monster = newMonsters[targetIndex]
-        
-        let newAtk = monster.originalAtk
-        let buffType = ''
-        
-        if (myLP < oppLP) {
-          newAtk = monster.originalAtk * 2
-          buffType = 'buffed'
-          alert(`${monster.name} được gấp đôi ATK! (${monster.originalAtk} -> ${newAtk})`)
-        } else if (myLP > oppLP) {
-          newAtk = Math.floor(monster.originalAtk / 2)
-          buffType = 'debuffed'
-          alert(`${monster.name} bị chia đôi ATK! (${monster.originalAtk} -> ${newAtk})`)
-        } else {
-          alert('LP bằng nhau, Megamorph không có tác dụng!')
-          return
-        }
-        
-        newMonsters[targetIndex] = {
-          ...monster,
-          atk: newAtk,
-          buffType: buffType
-        }
-        
-        setField({ ...field, monsters: newMonsters })
-      }
-    })
-  }
 
   const handleCrushCardVirus = (isPlayerTurn) => {
     const opponentHand = isPlayerTurn ? aiHand : playerHand
@@ -2461,7 +2455,7 @@ function Duel() {
     setTargetSelection({
       active: true,
       type: 'monster',
-      source: isPlayerTurn ? 'ai' : 'player',
+      source: 'ai',
       message: 'Chọn 1 quái thú của đối thủ cho Spellbinding Circle',
       onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
         const field = targetOwner === 'player' ? playerField : aiField
@@ -2486,47 +2480,121 @@ function Duel() {
   }
 
   const handleMegamorph = (isPlayerTurn) => {
+    if (!isPlayerTurn) {
+      // AI Logic for Megamorph
+      const myLP = aiLP
+      const oppLP = playerLP
+      // AI uses Refs for state in actions
+      const aiMonsters = aiFieldRef.current.monsters.map((m, i) => m ? { card: m, index: i, owner: 'ai' } : null).filter(m => m !== null)
+      const pMonsters = playerFieldRef.current.monsters.map((m, i) => m ? { card: m, index: i, owner: 'player' } : null).filter(m => m !== null)
+
+      if (myLP < oppLP && aiMonsters.length > 0) {
+        const target = aiMonsters.sort((a, b) => b.card.atk - a.card.atk)[0]
+        executeMegamorph(false, 'ai', target.index, target.card, myLP, oppLP)
+        alert(`AI đã trang bị Megamorph cho ${target.card.name}! ATK được nhân đôi!`)
+      } else if (myLP > oppLP && pMonsters.length > 0) {
+        const target = pMonsters.sort((a, b) => b.card.atk - a.card.atk)[0]
+        executeMegamorph(false, 'player', target.index, target.card, myLP, oppLP)
+        alert(`AI đã trang bị Megamorph cho ${target.card.name} của bạn! ATK bị chia đôi!`)
+      }
+      return
+    }
+
     setTargetSelection({
       active: true,
       type: 'monster',
-      source: isPlayerTurn ? 'player' : 'ai',
+      source: 'any',
       message: 'Megamorph: Chọn 1 quái thú để trang bị',
       onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
-        const field = targetOwner === 'player' ? playerField : aiField
-        const setField = targetOwner === 'player' ? setPlayerField : setAiField
-        
-        const myLP = isPlayerTurn ? playerLP : aiLP
-        const oppLP = isPlayerTurn ? aiLP : playerLP
-        
-        const newMonsters = [...field.monsters]
-        const monster = newMonsters[targetIndex]
-        if (!monster) return
-
-        const originalAtk = monster.originalAtk || monster.atk || 0
-        let newAtk = originalAtk
-        
-        if (myLP < oppLP) {
-          newAtk = originalAtk * 2
-          alert(`Megamorph: LP của bạn thấp hơn đối thủ! ATK của ${monster.name} được nhân đôi thành ${newAtk}!`)
-        } else if (myLP > oppLP) {
-          newAtk = Math.floor(originalAtk / 2)
-          alert(`Megamorph: LP của bạn cao hơn đối thủ! ATK của ${monster.name} bị chia đôi thành ${newAtk}!`)
-        } else {
-          alert(`Megamorph: LP cân bằng, ATK không đổi.`)
-        }
-        
-        newMonsters[targetIndex] = {
-          ...monster,
-          atk: newAtk,
-          originalAtk: originalAtk,
-          buffType: myLP < oppLP ? 'buffed' : 'debuffed'
-        }
-        
-        setField({ ...field, monsters: newMonsters })
+        executeMegamorph(true, targetOwner, targetIndex, targetCard, playerLP, aiLP)
+        const buff = playerLP < aiLP ? 'tăng gấp đôi' : 'bị chia đôi'
+        alert(`Megamorph: ${targetCard.name} đã ${buff} ATK!`)
         setTargetSelection(prev => ({ ...prev, active: false }))
       },
       onCancel: () => setTargetSelection(prev => ({ ...prev, active: false }))
     })
+  }
+
+  const executeMegamorph = (isPlayerActivator, targetOwner, targetIndex, monster, myLP, oppLP) => {
+    const setField = targetOwner === 'player' ? setPlayerField : setAiField
+    const originalAtk = monster.originalAtk || monster.atk || 0
+    let newAtk = originalAtk
+    let buffType = ''
+    
+    if (myLP < oppLP) {
+      newAtk = originalAtk * 2
+      buffType = 'buffed'
+    } else if (myLP > oppLP) {
+      newAtk = Math.floor(originalAtk / 2)
+      buffType = 'debuffed'
+    }
+    
+    setField(prev => {
+      const newMonsters = [...prev.monsters]
+      newMonsters[targetIndex] = {
+        ...monster,
+        atk: newAtk,
+        originalAtk: originalAtk,
+        buffType: buffType
+      }
+      const next = { ...prev, monsters: newMonsters }
+      if (targetOwner === 'player') playerFieldRef.current = next
+      else aiFieldRef.current = next
+      return next
+    })
+  }
+
+  const handleRingOfDestruction = (isPlayerTurn) => {
+    if (!isPlayerTurn) {
+      // AI Logic for Ring of Destruction
+      const pMonsters = playerFieldRef.current.monsters.map((m, i) => m ? { card: m, index: i, owner: 'player' } : null).filter(m => m !== null && m.card.faceUp)
+      if (pMonsters.length > 0) {
+        const target = pMonsters.sort((a, b) => b.card.atk - a.card.atk)[0]
+        executeRingOfDestruction(target.card, target.index, 'player')
+        alert(`AI kích hoạt Ring of Destruction và phá hủy ${target.card.name}!`)
+      }
+      return
+    }
+
+    setTargetSelection({
+      active: true,
+      type: 'monster',
+      source: 'any',
+      message: 'Ring of Destruction: Chọn 1 quái thú ngửa mặt để phá hủy',
+      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+        if (!targetCard.faceUp) {
+          alert('Chỉ có thể phá hủy quái thú đang ngửa mặt!')
+          return
+        }
+        executeRingOfDestruction(targetCard, targetIndex, targetOwner)
+        setTargetSelection(prev => ({ ...prev, active: false }))
+      },
+      onCancel: () => setTargetSelection(prev => ({ ...prev, active: false }))
+    })
+  }
+
+  const executeRingOfDestruction = (card, index, owner) => {
+    const damage = card.atk || 0
+    const field = owner === 'player' ? playerField : aiField
+    const setField = owner === 'player' ? setPlayerField : setAiField
+    const gy = owner === 'player' ? playerGraveyard : aiGraveyard
+    const setGy = owner === 'player' ? setPlayerGraveyard : setAiGraveyard
+
+    // Destroy monster
+    setField(prev => {
+      const newMonsters = [...prev.monsters]
+      newMonsters[index] = null
+      const next = { ...prev, monsters: newMonsters }
+      if (owner === 'player') playerFieldRef.current = next
+      else aiFieldRef.current = next
+      return next
+    })
+    setGy(prev => [...prev, card])
+
+    // Inflict damage to both
+    animateLP('player', damage)
+    animateLP('ai', damage)
+    alert(`Ring of Destruction: Phá hủy ${card.name} và gây ${damage} sát thương cho cả hai!`)
   }
 
 

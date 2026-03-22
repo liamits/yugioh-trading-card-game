@@ -112,7 +112,7 @@ const yamiYugiDeck = {
       level: 7,
       race: "Warrior",
       attribute: "EARTH",
-      image_url: "https://images.ygoprodeck.com/images/cards/06368038.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/6368038.jpg"
     },
     {
       id: 91152256,
@@ -189,7 +189,7 @@ const kaibaDeck = {
       level: 4,
       race: "Beast-Warrior",
       attribute: "EARTH",
-      image_url: "https://images.ygoprodeck.com/images/cards/05053103.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/5053103.jpg"
     },
     {
       id: 14898066,
@@ -347,7 +347,7 @@ const bakuraDeck = {
       name: "Change of Heart",
       type: "Normal Spell",
       desc: "Target 1 monster your opponent controls; take control of it until the End Phase.",
-      image_url: "https://images.ygoprodeck.com/images/cards/04031922.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/4031922.jpg"
     },
     {
       id: 33508719,
@@ -389,7 +389,7 @@ const marikDeck = {
       level: 8,
       race: "Fiend",
       attribute: "FIRE",
-      image_url: "https://images.ygoprodeck.com/images/cards/00102380.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/102380.jpg"
     },
     {
       id: 54704217,
@@ -432,7 +432,7 @@ const ishizuDeck = {
       level: 4,
       race: "Fairy",
       attribute: "EARTH",
-      image_url: "https://images.ygoprodeck.com/images/cards/06103284.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/6103284.jpg"
     },
     {
       id: 77723643,
@@ -456,7 +456,7 @@ const jadenDeck = {
       level: 7,
       race: "Warrior",
       attribute: "LIGHT",
-      image_url: "https://images.ygoprodeck.com/images/cards/02326738.jpg"
+      image_url: "https://images.ygoprodeck.com/images/cards/2326738.jpg"
     },
     {
       id: 24094653,
