@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "nodemon index.js",
-    "start": "node index.js"
+    "start": "node index.js",
+    "seed": "node seed.js",
+    "update-decks": "node updateDecks.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

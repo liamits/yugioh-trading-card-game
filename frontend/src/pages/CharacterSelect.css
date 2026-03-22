@@ -115,6 +115,142 @@
   text-shadow: 0 0 10px rgba(255, 119, 198, 0.5);
 }
 
+.difficulty-stars {
+  font-size: 1.2rem;
+  margin: 5px 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legendary-tag {
+  background: linear-gradient(135deg, #ffd700 0%, #ff8c00 100%);
+  color: #000;
+  font-size: 0.7rem;
+  font-weight: 900;
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 10px;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+.card-difficulty {
+  font-size: 0.7rem;
+  color: #ffd700;
+  margin-top: 2px;
+}
+
+/* Pre-Duel Intro */
+.vs-intro-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #05071a;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.vs-intro-background {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, #1a237e 0%, #05071a 100%);
+  opacity: 0.5;
+}
+
+.vs-intro-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  max-width: 1200px;
+  z-index: 10;
+}
+
+.vs-intro-player, .vs-intro-ai {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  animation: slideInSide 0.8s ease-out forwards;
+}
+
+.vs-intro-player {
+  transform: translateX(-200px);
+  opacity: 0;
+}
+
+.vs-intro-ai {
+  transform: translateX(200px);
+  opacity: 0;
+  animation-delay: 0.2s;
+}
+
+@keyframes slideInSide {
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.vs-intro-player img, .vs-intro-ai img {
+  width: 250px;
+  height: 250px;
+  border-radius: 50%;
+  border: 5px solid #8ab4f8;
+  box-shadow: 0 0 50px rgba(138, 180, 248, 0.5);
+  object-fit: cover;
+}
+
+.vs-intro-ai img {
+  border-color: #ff77c6;
+  box-shadow: 0 0 50px rgba(255, 119, 198, 0.5);
+}
+
+.vs-intro-player h2, .vs-intro-ai h2 {
+  font-size: 2.5rem;
+  color: #fff;
+  text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+.vs-intro-center {
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  animation-delay: 0.8s;
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+@keyframes popIn {
+  to {
+    opacity: 1;
+    transform: scale(1.5);
+  }
+}
+
+.vs-logo {
+  font-size: 5rem;
+  font-weight: 900;
+  color: #fff;
+  font-style: italic;
+  text-shadow: 0 0 40px #ff0000, 0 0 80px #ff0000;
+  animation: lightning 0.2s infinite alternate;
+}
+
+@keyframes lightning {
+  from { text-shadow: 0 0 40px #ff0000, 0 0 80px #ff0000; }
+  to { text-shadow: 0 0 30px #ff0000, 0 0 60px #ffd700; transform: scale(1.1); }
+}
+
+.vs-ai-stars {
+  font-size: 1.5rem;
+  margin-top: 10px;
+}
+
 .character-select {
   min-height: 100vh;
   padding: 20px;

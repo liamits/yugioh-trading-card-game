@@ -18,6 +18,7 @@ function CharacterSelect() {
   const [selectingFor, setSelectingFor] = useState('player') // 'player' or 'ai'
   const [showDuelLoading, setShowDuelLoading] = useState(true)
   const [isReady, setIsReady] = useState(false)
+  const [showVsIntro, setShowVsIntro] = useState(false)
 
   useEffect(() => {
     // Show duel loading for 2 seconds when entering this page
@@ -79,12 +80,15 @@ function CharacterSelect() {
 
   const startDuel = () => {
     if (playerCharacter && aiCharacter) {
-      navigate('/duel', {
-        state: {
-          player: playerCharacter,
-          ai: aiCharacter
-        }
-      })
+      setShowVsIntro(true)
+      setTimeout(() => {
+        navigate('/duel', {
+          state: {
+            player: playerCharacter,
+            ai: aiCharacter
+          }
+        })
+      }, 3500)
     }
   }
 
@@ -93,6 +97,28 @@ function CharacterSelect() {
     setAiCharacter(null)
     setSelectingFor('player')
     setIsReady(false)
+  }
+
+  if (showVsIntro) {
+    return (
+      <div className="vs-intro-screen">
+        <div className="vs-intro-background" />
+        <div className="vs-intro-content">
+          <div className="vs-intro-player">
+            <img src={playerCharacter.avatar} alt={playerCharacter.name} />
+            <h2>{playerCharacter.name}</h2>
+          </div>
+          <div className="vs-intro-center">
+            <div className="vs-logo">VS</div>
+          </div>
+          <div className="vs-intro-ai">
+            <img src={aiCharacter.avatar} alt={aiCharacter.name} />
+            <h2>{aiCharacter.name}</h2>
+            <div className="vs-ai-stars">{'⭐'.repeat(aiCharacter.difficulty || 1)}</div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (showDuelLoading || loading) {
@@ -123,6 +149,9 @@ function CharacterSelect() {
               <img src={playerCharacter.avatar} alt={playerCharacter.name} className="fighter-avatar" />
               <div className="fighter-info">
                 <h2>{playerCharacter.name}</h2>
+                <div className="difficulty-stars">
+                  {'⭐'.repeat(playerCharacter.difficulty || 1)}
+                </div>
                 <p>{playerCharacter.description}</p>
               </div>
             </>
@@ -165,6 +194,10 @@ function CharacterSelect() {
               <img src={aiCharacter.avatar} alt={aiCharacter.name} className="fighter-avatar" />
               <div className="fighter-info">
                 <h2>{aiCharacter.name}</h2>
+                <div className="difficulty-stars">
+                  {'⭐'.repeat(aiCharacter.difficulty || 1)}
+                  {aiCharacter.difficulty === 5 && <span className="legendary-tag">LEGENDARY</span>}
+                </div>
                 <p>{aiCharacter.description}</p>
               </div>
             </>
@@ -203,7 +236,12 @@ function CharacterSelect() {
                 onClick={() => !isDisabled && handleCharacterSelect(char)}
               >
                 <img src={char.avatar} alt={char.name} />
-                <div className="character-name">{char.name}</div>
+                <div className="character-name">
+                  {char.name}
+                  <div className="card-difficulty">
+                    {'⭐'.repeat(char.difficulty || 1)}
+                  </div>
+                </div>
                 {isSelected && <div className="selected-badge">✓</div>}
               </div>
             )

@@ -463,6 +463,19 @@
   text-shadow: 0 0 20px rgba(138, 180, 248, 1);
 }
 
+.ai-difficulty-badge {
+  margin-top: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 5px 15px;
+  border-radius: 15px;
+  border: 1px solid #ffd700;
+  color: #ffd700;
+  font-size: 0.9rem;
+  font-weight: bold;
+  text-align: center;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
 /* Menu Button */
 .menu-btn {
   position: absolute;

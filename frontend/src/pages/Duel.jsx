@@ -333,26 +333,44 @@ function Duel() {
   }, [chainPrompt.active, isMultiplayer])
 
   const handleAiTurn = async () => {
-    console.log("AI is thinking...")
+    const aiLevel = ai?.difficulty || 3
+    console.log(`AI is thinking (Level ${aiLevel})...`)
     
-    // 1. Main Phase 1: Summoning
-    await aiActionSummon()
+    // Level 1: Beginner - 30% chance to do nothing and end turn
+    if (aiLevel === 1 && Math.random() < 0.3) {
+      console.log("AI Level 1 decided to skip turn actions")
+      setTimeout(() => proceedEndTurn(), 1000)
+      return
+    }
+
+    // 1. Draw Phase (Already handled by proceedEndTurn/useEffect)
     
-    // 2. Main Phase 1: Activate/Set Spells/Traps
-    await aiActionSpells()
+    // 2. Standby Phase (Automatic for now)
     
-    // 3. Battle Phase
-    await aiActionBattle()
+    // 3. Main Phase 1: Summoning
+    await aiActionSummon(aiLevel)
     
-    // 4. End Turn
+    // 4. Main Phase 1: Activate/Set Spells/Traps
+    await aiActionSpells(aiLevel)
+    
+    // 5. Battle Phase
+    await aiActionBattle(aiLevel)
+    
+    // 6. End Turn
     setTimeout(() => {
       proceedEndTurn()
     }, 1000)
   }
 
-  const aiActionSummon = () => {
+  const aiActionSummon = (aiLevel) => {
     return new Promise((resolve) => {
       if (normalSummonUsed) {
+        setTimeout(resolve, 500)
+        return
+      }
+
+      // Level 1: Beginner - 50% chance to skip summoning even if possible
+      if (aiLevel === 1 && Math.random() < 0.5) {
         setTimeout(resolve, 500)
         return
       }
@@ -443,7 +461,7 @@ function Duel() {
     })
   }
 
-  const aiActionSpells = () => {
+  const aiActionSpells = (aiLevel) => {
     return new Promise(async (resolve) => {
       // 1. Pot of Greed / Graceful Charity
       const potIndex = aiHandRef.current.findIndex(c => c.name === 'Pot of Greed')
@@ -473,6 +491,18 @@ function Duel() {
       const darkHoleIndex = aiHandRef.current.findIndex(c => c.name === 'Dark Hole')
       
       if (raigekiIndex !== -1 && playerFieldRef.current.monsters.some(m => m !== null)) {
+        const pMonsters = playerFieldRef.current.monsters.filter(m => m !== null)
+        
+        // Smart AI (Level 4-5) only uses Raigeki if opponent has > 1 monster or a monster > 2400 ATK
+        if (aiLevel >= 4) {
+          const hasStrongMonster = pMonsters.some(m => m.atk > 2400)
+          if (pMonsters.length < 2 && !hasStrongMonster) {
+            console.log("AI Legendary/Hard is saving Raigeki for better timing")
+            resolve()
+            return
+          }
+        }
+
         const card = aiHandRef.current[raigekiIndex]
         console.log("AI activating Raigeki")
         const newHand = aiHandRef.current.filter((_, i) => i !== raigekiIndex)
@@ -625,8 +655,14 @@ function Duel() {
     })
   }
 
-  const aiActionBattle = () => {
+  const aiActionBattle = (aiLevel) => {
     return new Promise(async (resolve) => {
+      // Level 1: 50% chance to skip battle
+      if (aiLevel === 1 && Math.random() < 0.5) {
+        resolve()
+        return
+      }
+
       setCurrentPhase('BATTLE')
       
       const aiMonsters = aiFieldRef.current.monsters
@@ -3987,6 +4023,11 @@ function Duel() {
         <div className={`turn-text ${currentTurn === 'player' ? 'active' : ''}`}>
           {currentTurn === 'player' ? 'Your Turn' : 'Opponent Turn'}
         </div>
+        {currentTurn === 'ai' && ai?.difficulty && (
+          <div className="ai-difficulty-badge">
+            {'⭐'.repeat(ai.difficulty)} AI
+          </div>
+        )}
       </div>
 
       {/* Menu Button */}

@@ -19,6 +19,7 @@ function Home() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
+  const [userProfile, setUserProfile] = useState(null)
   const articlesSectionRef = useRef(null)
 
   const selectCategory = (cat) => {
@@ -35,6 +36,17 @@ function Home() {
       .then(data => setArticles(Array.isArray(data) && data.length > 0 ? data : FALLBACK_ARTICLES))
       .catch(() => setArticles(FALLBACK_ARTICLES))
       .finally(() => setLoading(false))
+
+    // Fetch user profile
+    const token = localStorage.getItem('token')
+    if (token) {
+      fetch('http://localhost:5000/api/users/profile', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+        .then(r => r.json())
+        .then(data => setUserProfile(data))
+        .catch(err => console.error('Failed to fetch profile:', err))
+    }
   }, [])
 
   const filtered = articles.filter(a => {
@@ -68,6 +80,12 @@ function Home() {
         </div>
 
         <div className="navbar-actions">
+          {userProfile && (
+            <div className="user-stats-nav">
+              <div className="nav-stat-item level">LV.{userProfile.level}</div>
+              <div className="nav-stat-item gold">💰 {userProfile.gold}</div>
+            </div>
+          )}
           <button className="nav-search-btn" onClick={() => navigate('/cards')}>
             🔍 TÌM BÀI
           </button>
