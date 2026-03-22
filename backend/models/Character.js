@@ -41,7 +41,12 @@ const characterSchema = new mongoose.Schema({
     min: 1,
     max: 5,
     default: 1
+  },
+  unlockLevel: {
+    type: Number,
+    default: 1
   }
+
 }, {
   timestamps: true
 })

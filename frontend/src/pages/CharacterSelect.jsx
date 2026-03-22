@@ -13,6 +13,7 @@ function CharacterSelect() {
   const [characters, setCharacters] = useState([])
   const [playerCharacter, setPlayerCharacter] = useState(null)
   const [aiCharacter, setAiCharacter] = useState(null)
+  const [userProfile, setUserProfile] = useState(null)
   const [opponentCharacter, setOpponentCharacter] = useState(null)
   const [loading, setLoading] = useState(true)
   const [selectingFor, setSelectingFor] = useState('player') // 'player' or 'ai'
@@ -25,6 +26,7 @@ function CharacterSelect() {
     const timer = setTimeout(() => {
       setShowDuelLoading(false)
       fetchCharacters()
+      fetchProfile()
     }, 2000)
 
     if (isMultiplayer && roomId) {
@@ -63,7 +65,30 @@ function CharacterSelect() {
     }
   }
 
+  const fetchProfile = async () => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      try {
+        const response = await fetch('http://localhost:5000/api/users/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const data = await response.json()
+        setUserProfile(data)
+      } catch (err) {
+        console.error('Failed to fetch profile:', err)
+      }
+    }
+  }
+
   const handleCharacterSelect = (character) => {
+    const userLevel = userProfile?.level || 1
+    const isLocked = character.unlockLevel > userLevel
+    
+    if (isLocked && selectingFor === 'player') {
+      alert(`Nhân vật này yêu cầu Level ${character.unlockLevel} để mở khóa!`)
+      return
+    }
+
     if (isMultiplayer) {
       setPlayerCharacter(character)
       setIsReady(true)
@@ -229,12 +254,21 @@ function CharacterSelect() {
             const isDisabled = 
               (selectingFor === 'ai' && playerCharacter?._id === char._id)
 
+            const userLevel = userProfile?.level || 1
+            const isLocked = char.unlockLevel > userLevel && selectingFor === 'player'
+
             return (
               <div
                 key={char._id}
-                className={`character-card ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''}`}
-                onClick={() => !isDisabled && handleCharacterSelect(char)}
+                className={`character-card ${isSelected ? 'selected' : ''} ${isDisabled ? 'disabled' : ''} ${isLocked ? 'locked' : ''}`}
+                onClick={() => !isDisabled && !isLocked && handleCharacterSelect(char)}
               >
+                {isLocked && (
+                  <div className="locked-overlay">
+                    <span className="lock-icon">🔒</span>
+                    <span className="unlock-req">LV.{char.unlockLevel}</span>
+                  </div>
+                )}
                 <img src={char.avatar} alt={char.name} />
                 <div className="character-name">
                   {char.name}

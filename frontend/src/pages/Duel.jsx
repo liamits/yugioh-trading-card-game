@@ -47,6 +47,7 @@ function Duel() {
   const [damageAnimation, setDamageAnimation] = useState({ player: null, ai: null })
   const [gameOver, setGameOver] = useState(false)
   const [winner, setWinner] = useState(null)
+  const [progressData, setProgressData] = useState(null)
   const [contextMenu, setContextMenu] = useState(null)
   const [tributeMode, setTributeMode] = useState(false)
   const [selectedTributes, setSelectedTributes] = useState([])
@@ -124,8 +125,9 @@ function Duel() {
     onCancel: null // if they choose not to chain
   })
 
+  const [swordsActive, setSwordsActive] = useState({ active: false, owner: null, turnsLeft: 0, zoneIndex: null })
+  
   // Phase 4 States
-  const [skipNextDraw, setSkipNextDraw] = useState({ player: false, ai: false })
 
   useEffect(() => {
     if (!player || !ai) {
@@ -306,7 +308,11 @@ function Duel() {
           if (response.ok) {
             const data = await response.json()
             console.log('Progress updated:', data)
-            if (data.leveledUp) alert(`Chúc mừng! Bạn đã lên Level ${data.level}!`)
+            setProgressData({
+              ...data,
+              expGained,
+              goldGained
+            })
           }
         } catch (err) {
           console.error('Failed to update progress:', err)
@@ -647,8 +653,18 @@ function Duel() {
           aiFieldRef.current = next
           return next
         })
-        console.log(`AI Set ${card.name}`)
-        await new Promise(r => setTimeout(r, 500))
+        await new Promise(r => setTimeout(r, 1000))
+      }
+
+      // 6. Time Wizard Effect
+      const timeWizardIndex = aiFieldRef.current.monsters.findIndex(m => m && m.name.toLowerCase().includes('time wizard') && m.faceUp)
+      const pMonstersCount = playerFieldRef.current.monsters.filter(m => m !== null).length
+      
+      if (timeWizardIndex !== -1 && pMonstersCount > 0) {
+        console.log("AI deciding to use Time Wizard effect...")
+        // AI uses it if player has monsters. Since Joey is a gambler, he always uses it!
+        handleTimeWizard(timeWizardIndex)
+        await new Promise(r => setTimeout(r, 3000))
       }
 
       setTimeout(resolve, 500)
@@ -660,6 +676,13 @@ function Duel() {
       // Level 1: 50% chance to skip battle
       if (aiLevel === 1 && Math.random() < 0.5) {
         resolve()
+        return
+      }
+
+      // Check Swords of Revealing Light
+      if (swordsActive.active && swordsActive.owner === 'player') {
+        console.log("AI cannot attack due to Swords of Revealing Light")
+        setTimeout(resolve, 1000)
         return
       }
 
@@ -904,6 +927,31 @@ function Duel() {
           return prevDeck
         })
       }
+    }
+    
+    // Handle Swords of Revealing Light counter (at start of activator's turn? No, usually it counts opponent turns)
+    // Rule: stays on field for 3 of opponent's turns.
+    if (swordsActive.active && nextTurn === swordsActive.owner) {
+      setSwordsActive(prev => {
+        const newTurns = prev.turnsLeft - 1
+        if (newTurns <= 0) {
+          // Remove from field
+          const field = prev.owner === 'player' ? playerField : aiField
+          const setField = prev.owner === 'player' ? setPlayerField : setAiField
+          const gy = prev.owner === 'player' ? playerGraveyard : aiGraveyard
+          const setGy = prev.owner === 'player' ? setPlayerGraveyard : setAiGraveyard
+          
+          const newSpells = [...field.spells]
+          const card = newSpells[prev.zoneIndex]
+          newSpells[prev.zoneIndex] = null
+          setField({ ...field, spells: newSpells })
+          setGy([...gy, card])
+          
+          alert(`${card.name} hết hiệu lực và đã bị gửi vào Nghĩa địa.`)
+          return { active: false, owner: null, turnsLeft: 0, zoneIndex: null }
+        }
+        return { ...prev, turnsLeft: newTurns }
+      })
     }
   }
 
@@ -1206,19 +1254,19 @@ function Duel() {
           active: true,
           player: isPlayerTurn ? 'ai' : 'player',
           sourceAction: `${card.name} được kích hoạt!`,
-          onResolve: () => applySpellEffect(card, isPlayerTurn),
-          onCancel: () => applySpellEffect(card, isPlayerTurn),
+          onResolve: () => applySpellEffect(card, isPlayerTurn, zoneIndex),
+          onCancel: () => applySpellEffect(card, isPlayerTurn, zoneIndex),
           context: { type: 'spell_activation', card, isPlayerTurn }
         })
         if (isPlayerTurn) {
           setTimeout(() => {
             setChainPrompt(prev => ({ ...prev, active: false }))
-            applySpellEffect(card, isPlayerTurn)
+            applySpellEffect(card, isPlayerTurn, zoneIndex)
           }, 1000)
         }
       } else {
         // Apply effect based on card
-        applySpellEffect(card, isPlayerTurn)
+        applySpellEffect(card, isPlayerTurn, zoneIndex)
       }
     } else {
       // Remove from hand FIRST
@@ -1241,19 +1289,19 @@ function Duel() {
           active: true,
           player: isPlayerTurn ? 'ai' : 'player',
           sourceAction: `${card.name} được kích hoạt!`,
-          onResolve: () => applySpellEffect(card, isPlayerTurn),
-          onCancel: () => applySpellEffect(card, isPlayerTurn),
+          onResolve: () => applySpellEffect(card, isPlayerTurn, zoneIndex),
+          onCancel: () => applySpellEffect(card, isPlayerTurn, zoneIndex),
           context: { type: 'spell_activation', card, isPlayerTurn }
         })
         if (isPlayerTurn) {
           setTimeout(() => {
             setChainPrompt(prev => ({ ...prev, active: false }))
-            applySpellEffect(card, isPlayerTurn)
+            applySpellEffect(card, isPlayerTurn, zoneIndex)
           }, 1000)
         }
       } else {
         // Apply effect based on card
-        applySpellEffect(card, isPlayerTurn)
+        applySpellEffect(card, isPlayerTurn, zoneIndex)
       }
     }
 
@@ -1263,7 +1311,7 @@ function Duel() {
     setSelectingZone(false)
   }
 
-  const applySpellEffect = (card, isPlayerTurn) => {
+  const applySpellEffect = (card, isPlayerTurn, zoneIndex = null) => {
     const cardName = card.name.toLowerCase()
     const effectText = card.desc.toLowerCase()
     
@@ -1544,6 +1592,68 @@ function Duel() {
         setAiGraveyard(prev => prev.filter(c => c.id !== selectedSpell.id))
         setAiHand(prev => [...prev, selectedSpell])
         alert(`AI kích hoạt hiệu ứng FLIP của Magician of Faith và lấy ${selectedSpell.name} về tay!`)
+      }
+    } else if (cardName.includes('man-eater bug')) {
+      // Destroy 1 monster on the field
+      if (isPlayer) {
+        setTargetSelection({
+          active: true,
+          type: 'monster',
+          source: 'any',
+          message: 'Man-Eater Bug: Chọn 1 quái thú trên sân để phá hủy',
+          onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+            const targetField = targetOwner === 'player' ? playerField : aiField
+            const setTargetField = targetOwner === 'player' ? setPlayerField : setAiField
+            const targetGY = targetOwner === 'player' ? playerGraveyard : aiGraveyard
+            const setTargetGY = targetOwner === 'player' ? setPlayerGraveyard : setAiGraveyard
+            
+            const newMonsters = [...targetField.monsters]
+            newMonsters[targetIndex] = null
+            setTargetField({ ...targetField, monsters: newMonsters })
+            setTargetGY([...targetGY, targetCard])
+            
+            alert(`Man-Eater Bug: Đã phá hủy ${targetCard.name}!`)
+            setTargetSelection(prev => ({ ...prev, active: false }))
+          },
+          onCancel: () => setTargetSelection(prev => ({ ...prev, active: false }))
+        })
+      } else {
+        // AI chooses target: strongest player monster
+        const pMonsters = playerField.monsters
+          .map((m, i) => m ? { card: m, index: i, owner: 'player' } : null)
+          .filter(m => m !== null)
+        
+        if (pMonsters.length > 0) {
+          const target = pMonsters.sort((a, b) => (b.card.atk || 0) - (a.card.atk || 0))[0]
+          const newMonsters = [...playerField.monsters]
+          newMonsters[target.index] = null
+          setPlayerField({ ...playerField, monsters: newMonsters })
+          setPlayerGraveyard(prev => [...prev, target.card])
+          alert(`AI kích hoạt hiệu ứng FLIP của Man-Eater Bug và phá hủy ${target.card.name}!`)
+        } else {
+          // AI must destroy its own monster if player has none? 
+          // Rule: Man-Eater target is mandatory.
+          const aMonsters = aiField.monsters
+            .map((m, i) => m ? { card: m, index: i, owner: 'ai' } : null)
+            .filter(m => m !== null && m.index !== index) // Don't destroy itself if possible? 
+            // Wait, effects usually happen AFTER flipping. Man-Eater can destroy itself if it's the only monster.
+          
+          if (aMonsters.length > 0) {
+             const target = aMonsters.sort((a, b) => (a.card.atk || 0) - (b.card.atk || 0))[0]
+             const newMonsters = [...aiField.monsters]
+             newMonsters[target.index] = null
+             setAiField({ ...aiField, monsters: newMonsters })
+             setAiGraveyard(prev => [...prev, target.card])
+             alert(`AI kích hoạt hiệu ứng FLIP của Man-Eater Bug. Không có mục tiêu phe ta, AI phá hủy chính ${target.card.name} của mình!`)
+          } else {
+             // Destroy itself
+             const newMonsters = [...aiField.monsters]
+             newMonsters[index] = null
+             setAiField({ ...aiField, monsters: newMonsters })
+             setAiGraveyard(prev => [...prev, card])
+             alert(`AI kích hoạt hiệu ứng FLIP của Man-Eater Bug và phá hủy chính nó!`)
+          }
+        }
       }
     }
   }
@@ -2375,6 +2485,51 @@ function Duel() {
     })
   }
 
+  const handleMegamorph = (isPlayerTurn) => {
+    setTargetSelection({
+      active: true,
+      type: 'monster',
+      source: isPlayerTurn ? 'player' : 'ai',
+      message: 'Megamorph: Chọn 1 quái thú để trang bị',
+      onSelect: (targetCard, targetType, targetIndex, targetOwner) => {
+        const field = targetOwner === 'player' ? playerField : aiField
+        const setField = targetOwner === 'player' ? setPlayerField : setAiField
+        
+        const myLP = isPlayerTurn ? playerLP : aiLP
+        const oppLP = isPlayerTurn ? aiLP : playerLP
+        
+        const newMonsters = [...field.monsters]
+        const monster = newMonsters[targetIndex]
+        if (!monster) return
+
+        const originalAtk = monster.originalAtk || monster.atk || 0
+        let newAtk = originalAtk
+        
+        if (myLP < oppLP) {
+          newAtk = originalAtk * 2
+          alert(`Megamorph: LP của bạn thấp hơn đối thủ! ATK của ${monster.name} được nhân đôi thành ${newAtk}!`)
+        } else if (myLP > oppLP) {
+          newAtk = Math.floor(originalAtk / 2)
+          alert(`Megamorph: LP của bạn cao hơn đối thủ! ATK của ${monster.name} bị chia đôi thành ${newAtk}!`)
+        } else {
+          alert(`Megamorph: LP cân bằng, ATK không đổi.`)
+        }
+        
+        newMonsters[targetIndex] = {
+          ...monster,
+          atk: newAtk,
+          originalAtk: originalAtk,
+          buffType: myLP < oppLP ? 'buffed' : 'debuffed'
+        }
+        
+        setField({ ...field, monsters: newMonsters })
+        setTargetSelection(prev => ({ ...prev, active: false }))
+      },
+      onCancel: () => setTargetSelection(prev => ({ ...prev, active: false }))
+    })
+  }
+
+
 
   const handleChainDestruction = (isPlayerTurn) => {
     alert('Chain Destruction: Khi monster bị phá hủy, phá hủy tất cả copies trong hand/deck! (Cần implement chain system)')
@@ -2419,10 +2574,78 @@ function Duel() {
     alert(`Fissure: Phá hủy ${targetMonster.name} (ATK: ${targetMonster.atk})`)
   }
 
-  const handleSwordsOfRevealingLight = (isPlayerTurn) => {
-    // This would need a turn counter system
-    alert('Swords of Revealing Light: Đối thủ không thể tấn công trong 3 turn! (Cần implement turn counter)')
+  const handleSwordsOfRevealingLight = (isPlayerTurn, zoneIndex) => {
+    const opponentField = isPlayerTurn ? aiField : playerField
+    const setOpponentField = isPlayerTurn ? setAiField : setPlayerField
+    const owner = isPlayerTurn ? 'player' : 'ai'
+
+    // 1. Flip all opponent's monsters face-up
+    const newMonsters = opponentField.monsters.map(m => {
+      if (m && !m.faceUp) {
+        // This should trigger flip effects if any!
+        // handleFlipEffect(m, ...) is complex here. For now, just flip.
+        return { ...m, faceUp: true }
+      }
+      return m
+    })
+    setOpponentField({ ...opponentField, monsters: newMonsters })
+
+    // 2. Set swords state
+    setSwordsActive({ active: true, owner, turnsLeft: 3, zoneIndex })
+    alert(`${owner === 'player' ? 'Bạn' : 'AI'} kích hoạt Swords of Revealing Light: Quái thú đối thủ bị lật ngửa và không thể tấn công trong 3 lượt!`)
   }
+
+  const handleActivateMonsterEffect = (card, index) => {
+    const cardName = card.name.toLowerCase()
+    
+    if (cardName.includes('time wizard')) {
+      handleTimeWizard(index)
+    } else {
+      alert(`${card.name} không có hiệu ứng chủ động!`)
+    }
+  }
+
+  const handleTimeWizard = (index) => {
+    const isPlayer = currentTurn === 'player'
+    const ownerName = isPlayer ? 'Bạn' : 'AI'
+    alert(`${ownerName}: Time Wizard - Bắt đầu quay kim đồng hồ!`)
+    
+    // Toss coin
+    const win = Math.random() > 0.5
+    
+    setTimeout(() => {
+      if (win) {
+        alert(`${ownerName} THẮNG! Time Wizard phá hủy tất cả quái thú của đối thủ!`)
+        const opponentField = isPlayer ? aiField : playerField
+        const setOpponentField = isPlayer ? setAiField : setPlayerField
+        const opponentGY = isPlayer ? aiGraveyard : playerGraveyard
+        const setOpponentGY = isPlayer ? setAiGraveyard : setPlayerGraveyard
+        
+        const destroyedMonsters = opponentField.monsters.filter(m => m !== null)
+        const newMonsters = opponentField.monsters.map(() => null)
+        
+        setOpponentField({ ...opponentField, monsters: newMonsters })
+        setOpponentGY(prev => [...prev, ...destroyedMonsters])
+      } else {
+        alert(`${ownerName} THUA! Time Wizard phá hủy tất cả quái thú phe ta và gây sát thương!`)
+        const myField = isPlayer ? playerField : aiField
+        const setMyField = isPlayer ? setPlayerField : setAiField
+        const myGY = isPlayer ? playerGraveyard : aiGraveyard
+        const setMyGY = isPlayer ? setPlayerGraveyard : setAiGraveyard
+        
+        const myMonsters = myField.monsters.filter(m => m !== null)
+        const totalAtk = myMonsters.reduce((sum, m) => sum + (m.atk || 0), 0)
+        const damage = Math.floor(totalAtk / 2)
+        
+        const newMonsters = myField.monsters.map(() => null)
+        setMyField({ ...myField, monsters: newMonsters })
+        setMyGY(prev => [...prev, ...myMonsters])
+        
+        animateLP(isPlayer ? 'player' : 'ai', damage)
+      }
+    }, 2000)
+  }
+
 
   const handleChangeOfHeart = (isPlayerTurn) => {
     setTargetSelection({
@@ -2977,7 +3200,7 @@ function Duel() {
     }
 
     // Apply effect
-    applySpellEffect(card, isPlayerTurn)
+    applySpellEffect(card, isPlayerTurn, zoneIndex)
   }
 
   const handleRightClick = (e, card, type, index, isCurrentPlayer) => {
@@ -3502,6 +3725,47 @@ function Duel() {
                 </div>
               </div>
             </div>
+
+            {progressData && (
+              <div className="progress-section">
+                <div className="progress-stats">
+                  <div className="stat-box exp">
+                    <span className="stat-label">EXP</span>
+                    <span className="stat-value">+{progressData.expGained}</span>
+                  </div>
+                  <div className="stat-box gold">
+                    <span className="stat-label">GOLD</span>
+                    <span className="stat-value">+{progressData.goldGained}</span>
+                  </div>
+                </div>
+                
+                <div className="level-info">
+                  <div className="level-badge">LV {progressData.level}</div>
+                  <div className="exp-bar-container">
+                    <div 
+                      className="exp-bar-fill" 
+                      style={{ width: `${(progressData.exp / progressData.nextLevelExp) * 100}%` }}
+                    />
+                    <span className="exp-text">{progressData.exp} / {progressData.nextLevelExp}</span>
+                  </div>
+                </div>
+
+                {progressData.leveledUp && (
+                  <div className="level-up-msg">🎊 LEVEL UP! 🎊</div>
+                )}
+                
+                {progressData.unlockedCharacters && progressData.unlockedCharacters.length > 0 && (
+                  <div className="unlock-section">
+                    <h4>New Characters Unlocked:</h4>
+                    <div className="unlock-list">
+                      {progressData.unlockedCharacters.map((charName, i) => (
+                        <div key={i} className="unlock-item">🔓 {charName}</div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="game-over-buttons">
               <button 
@@ -4229,6 +4493,19 @@ function Duel() {
             <div className="context-menu-header">
               {contextMenu.card.name}
             </div>
+
+            {/* Activate Effect option for Effect Monsters */}
+            {contextMenu.type === 'monster' && contextMenu.card.type.includes('Effect') && contextMenu.isCurrentPlayer && contextMenu.card.faceUp && (currentPhase === 'MAIN1' || currentPhase === 'MAIN2') && (
+              <button 
+                className="context-menu-item activate"
+                onClick={() => {
+                  handleActivateMonsterEffect(contextMenu.card, contextMenu.index)
+                  setContextMenu(null)
+                }}
+              >
+                🪄 Kích hoạt Hiệu ứng
+              </button>
+            )}
             
             {/* Change position option for monsters */}
             {contextMenu.type === 'monster' && contextMenu.isCurrentPlayer && (currentPhase === 'MAIN1' || currentPhase === 'MAIN2') && (
