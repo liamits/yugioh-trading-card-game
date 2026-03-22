@@ -3086,4 +3086,131 @@
   from { transform: scale(1); opacity: 0.8; }
   to { transform: scale(1.1); opacity: 1; }
 }
+
+/* Chain Modal New Interface */
+.chain-modal-content {
+  max-width: 800px;
+  min-width: 400px;
+  border-color: #ff3e81;
+  box-shadow: 0 0 50px rgba(255, 62, 129, 0.4);
+}
+
+.chain-modal-header h3 {
+  color: #ff3e81;
+  font-size: 1.8rem;
+  margin-bottom: 5px;
+  text-shadow: 0 0 10px rgba(255, 62, 129, 0.5);
+}
+
+.chain-source-desc {
+  font-size: 1.1rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 8px 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.activatable-cards-section {
+  margin: 20px 0;
+  text-align: left;
+}
+
+.activatable-cards-section h4 {
+  color: #8ab4f8;
+  margin-bottom: 15px;
+}
+
+.activatable-cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  justify-content: center;
+  max-height: 350px;
+  overflow-y: auto;
+  padding: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+}
+
+.activatable-card-item {
+  width: 100px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  text-align: center;
+}
+
+.activatable-card-item img {
+  width: 100%;
+  border-radius: 5px;
+  border: 2px solid transparent;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.activatable-card-item:hover {
+  transform: translateY(-5px) scale(1.05);
+}
+
+.activatable-card-item:hover img {
+  border-color: #ff3e81;
+  box-shadow: 0 0 20px rgba(255, 62, 129, 0.6);
+}
+
+.card-source-tag {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ff3e81;
+  color: white;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+  z-index: 2;
+}
+
+.activatable-card-name {
+  font-size: 0.75rem;
+  margin-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+}
+
+.no-cards-msg {
+  color: rgba(255,255,255,0.5);
+  font-style: italic;
+  padding: 20px;
+}
+
+.chain-modal-footer {
+  margin-top: 30px;
+}
+
+.btn-cancel-chain {
+  background: linear-gradient(45deg, #1a2a6c, #b21f1f);
+  color: white;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 30px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.btn-cancel-chain:hover {
+  background: linear-gradient(45deg, #b21f1f, #fdbb2d);
+  transform: scale(1.05);
+  box-shadow: 0 8px 25px rgba(178, 31, 31, 0.5);
+}
+
+.chain-hint {
+  margin-top: 20px;
+  font-size: 0.85rem;
+  color: #ffd700;
+  opacity: 0.8;
+}
 

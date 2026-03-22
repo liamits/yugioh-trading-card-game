@@ -125,7 +125,8 @@ function Duel() {
     onCancel: null // if they choose not to chain
   })
 
-  const [swordsActive, setSwordsActive] = useState({ active: false, owner: null, turnsLeft: 0, zoneIndex: null })
+  const [firstTurnDrawSkipped, setFirstTurnDrawSkipped] = useState(false)
+  const [skipNextDraw, setSkipNextDraw] = useState({ player: false, ai: false })
   
   // Phase 4 States
 
@@ -504,26 +505,41 @@ function Duel() {
           const hasStrongMonster = pMonsters.some(m => m.atk > 2400)
           if (pMonsters.length < 2 && !hasStrongMonster) {
             console.log("AI Legendary/Hard is saving Raigeki for better timing")
-            resolve()
-            return
+            // Don't return/resolve here, just go to next spell checks
+          } else {
+            const card = aiHandRef.current[raigekiIndex]
+            console.log("AI activating Raigeki")
+            const newHand = aiHandRef.current.filter((_, i) => i !== raigekiIndex)
+            setAiHand(newHand)
+            aiHandRef.current = newHand
+            
+            setAiGraveyard(prev => [...prev, card])
+            executeEffect(card, { 
+              isPlayerTurn: false,
+              playerField: playerFieldRef.current, setPlayerField,
+              aiField: aiFieldRef.current, setAiField,
+              playerGraveyard: playerGraveyardRef.current, setPlayerGraveyard,
+              aiGraveyard: aiGraveyardRef.current, setAiGraveyard
+            })
+            await new Promise(r => setTimeout(r, 1000))
           }
+        } else {
+          // Level 1-3 AI uses it immediately if player has monsters
+          const card = aiHandRef.current[raigekiIndex]
+          console.log("AI activating Raigeki")
+          const newHand = aiHandRef.current.filter((_, i) => i !== raigekiIndex)
+          setAiHand(newHand)
+          aiHandRef.current = newHand
+          setAiGraveyard(prev => [...prev, card])
+          executeEffect(card, { 
+            isPlayerTurn: false,
+            playerField: playerFieldRef.current, setPlayerField,
+            aiField: aiFieldRef.current, setAiField,
+            playerGraveyard: playerGraveyardRef.current, setPlayerGraveyard,
+            aiGraveyard: aiGraveyardRef.current, setAiGraveyard
+          })
+          await new Promise(r => setTimeout(r, 1000))
         }
-
-        const card = aiHandRef.current[raigekiIndex]
-        console.log("AI activating Raigeki")
-        const newHand = aiHandRef.current.filter((_, i) => i !== raigekiIndex)
-        setAiHand(newHand)
-        aiHandRef.current = newHand
-        
-        setAiGraveyard(prev => [...prev, card])
-        executeEffect(card, { 
-          isPlayerTurn: false,
-          playerField: playerFieldRef.current, setPlayerField,
-          aiField: aiFieldRef.current, setAiField,
-          playerGraveyard: playerGraveyardRef.current, setPlayerGraveyard,
-          aiGraveyard: aiGraveyardRef.current, setAiGraveyard
-        })
-        await new Promise(r => setTimeout(r, 1000))
       } else if (darkHoleIndex !== -1 && (playerFieldRef.current.monsters.some(m => m !== null) || aiFieldRef.current.monsters.some(m => m !== null))) {
         // AI uses Dark Hole if player has more monsters
         const pCount = playerFieldRef.current.monsters.filter(m => m !== null).length
@@ -905,58 +921,74 @@ function Duel() {
         return { ...prev, spells: updatedSpells }
       })
     }
+    // 2. Clear summoning flags
+    setNormalSummonUsed(false)
     
+    // 3. Update turn and reset phase to DRAW
     setCurrentTurn(nextTurn)
     setCurrentPhase('DRAW')
     setDuelTurnCount(prev => prev + 1)
-    setNormalSummonUsed(false)
-    
-    // Auto proceed through Draw and Standby if no effects
-    if (nextTurn === 'player') {
-      setTimeout(() => {
-        // Draw card is already handled below or in a separate function
-        // For now, let's just move to MAIN1 after a delay
-        setCurrentPhase('STANDBY')
-        setTimeout(() => setCurrentPhase('MAIN1'), 1000)
-      }, 1000)
+  }
+
+  // New Draw Card Function
+  const drawCard = (targetPlayer) => {
+    const isPlayer = targetPlayer === 'player'
+    const deck = isPlayer ? playerDeck : aiDeck
+    const setDeck = isPlayer ? setPlayerDeck : setAiDeck
+    const setHand = isPlayer ? setPlayerHand : setAiHand
+
+    if (deck.length === 0) {
+      setGameOver(true)
+      setWinner(isPlayer ? 'ai' : 'player')
+      alert(`${isPlayer ? player.name : ai.name} đã hết bài! Deck Out!`)
+      return false
     }
-    if (nextTurn === 'player') {
-      if (skipNextDraw.player) {
-        alert('Time Seal: Bạn bỏ qua Draw Phase!')
-        setSkipNextDraw(prev => ({ ...prev, player: false }))
-      } else {
-        setPlayerDeck(prevDeck => {
-          if (prevDeck.length > 0) {
-            const newCard = prevDeck[0]
-            setPlayerHand(prevHand => [...prevHand, newCard])
-            return prevDeck.slice(1)
-          }
-          return prevDeck
-        })
+
+    const newCard = deck[0]
+    setDeck(prev => prev.slice(1))
+    setHand(prev => [...prev, newCard])
+    return true
+  }
+
+  // Handle Phase Transitions automatically
+  useEffect(() => {
+    if (gameOver) return
+
+    if (currentPhase === 'DRAW') {
+      console.log(`Phase: DRAW - Turn: ${currentTurn}`)
+      
+      // Rules: First player doesn't draw on turn 1
+      if (duelTurnCount === 1 && !firstTurnDrawSkipped) {
+        console.log("Turn 1: Skipping draw for starting player")
+        setFirstTurnDrawSkipped(true)
+        setTimeout(() => setCurrentPhase('STANDBY'), 1000)
+        return
       }
-    } else if (nextTurn === 'ai') {
-      if (skipNextDraw.ai) {
-        alert('Time Seal: Đối thủ bỏ qua Draw Phase!')
-        setSkipNextDraw(prev => ({ ...prev, ai: false }))
+
+      const isSkipped = currentTurn === 'player' ? skipNextDraw.player : skipNextDraw.ai
+      if (isSkipped) {
+        alert(`${currentTurn === 'player' ? 'Bạn' : 'Đối thủ'} bỏ qua Draw Phase!`)
+        setSkipNextDraw(prev => ({ ...prev, [currentTurn]: false }))
+        setTimeout(() => setCurrentPhase('STANDBY'), 1000)
       } else {
-        setAiDeck(prevDeck => {
-          if (prevDeck.length > 0) {
-            const newCard = prevDeck[0]
-            setAiHand(prevHand => [...prevHand, newCard])
-            return prevDeck.slice(1)
-          }
-          return prevDeck
-        })
+        // Draw card
+        setTimeout(() => {
+          drawCard(currentTurn)
+          setTimeout(() => setCurrentPhase('STANDBY'), 1000)
+        }, 500)
       }
+    } else if (currentPhase === 'STANDBY') {
+      console.log(`Phase: STANDBY - Turn: ${currentTurn}`)
+      // Handle standby effects here (e.g. Swords of Revealing Light counter)
+      setTimeout(() => setCurrentPhase('MAIN1'), 1000)
     }
-    
-    // Handle Swords of Revealing Light counter (at start of activator's turn? No, usually it counts opponent turns)
-    // Rule: stays on field for 3 of opponent's turns.
+  }, [currentPhase, currentTurn, gameOver, duelTurnCount, firstTurnDrawSkipped, skipNextDraw])
+
+  const handleSwordsCounter = (nextTurn) => {
     if (swordsActive.active && nextTurn === swordsActive.owner) {
       setSwordsActive(prev => {
         const newTurns = prev.turnsLeft - 1
         if (newTurns <= 0) {
-          // Remove from field
           const field = prev.owner === 'player' ? playerField : aiField
           const setField = prev.owner === 'player' ? setPlayerField : setAiField
           const gy = prev.owner === 'player' ? playerGraveyard : aiGraveyard
@@ -1826,6 +1858,34 @@ function Duel() {
     setTimeout(() => {
       handleChainResponse('no')
     }, 1200)
+  }
+
+  const getActivatableCards = () => {
+    const activatable = []
+    
+    // 1. Check traps/spells on field
+    playerField.spells.forEach((card, index) => {
+      if (card && !card.faceUp) {
+        // Basic check: Trap or Quick-Play
+        const isTrap = card.type.includes('Trap')
+        const isQuickPlay = card.desc.includes('Quick-Play') || card.type.includes('Quick-Play')
+        
+        if (isTrap || isQuickPlay) {
+          activatable.push({ card, index, source: 'field' })
+        }
+      }
+    })
+    
+    // 2. Check hand (Kuriboh, etc.)
+    playerHand.forEach((card, index) => {
+      if (card.name.toLowerCase().includes('kuriboh')) {
+        if (chainPrompt.context?.type === 'attack' || chainPrompt.context?.type === 'direct_attack') {
+          activatable.push({ card, index, source: 'hand' })
+        }
+      }
+    })
+    
+    return activatable
   }
 
 
@@ -3900,45 +3960,6 @@ function Duel() {
         </div>
       )}
 
-      {/* Chain Prompt Overlay */}
-      {chainPrompt.active && (
-        <div className="target-selection-overlay" style={{ zIndex: 60 }}>
-          <div className="target-selection-content">
-            <div className="target-selection-pulse"></div>
-            <h3>⚡ Chuỗi Kích Hoạt (Chain)</h3>
-            <p className="chain-source">{chainPrompt.sourceAction}</p>
-            <p>Bạn có muốn kích hoạt Bài Bẫy / Bài Phép Nhanh để phản hồi không?</p>
-            <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              <button 
-                className="btn-resolve"
-                style={{
-                  background: 'linear-gradient(45deg, #1a2a6c, #b21f1f)',
-                  padding: '10px 20px',
-                  border: 'none',
-                  borderRadius: '5px',
-                  color: 'white',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  boxShadow: '0 0 10px rgba(255,50,50,0.5)'
-                }}
-                onClick={() => {
-                   if (isMultiplayer && roomId && chainPrompt.player === 'player') {
-                     socket.emit('chain-response', { roomId, response: 'no' })
-                   }
-                   setChainPrompt(prev => ({ ...prev, active: false }))
-                   if (chainPrompt.onCancel) chainPrompt.onCancel()
-                }}
-              >
-                Không, tiếp tục
-              </button>
-            </div>
-            <p style={{ marginTop: '15px', color: '#ffeb3b', fontSize: '0.9rem' }}>
-              (Click vào một bài đang úp trên sân bạn để kích hoạt)
-            </p>
-          </div>
-        </div>
-      )}
-
       {/* Graveyard Selection Modal */}
 
       {graveyardSelection.active && (
@@ -4821,31 +4842,63 @@ function Duel() {
       )}
 
       {/* Chain Prompt Overlay */}
-      {chainPrompt.active && (
-        <div className="chain-overlay">
-          <div className="chain-content">
-            <div className="chain-header">
-              <h3>DÂY CHUYỀN (CHAIN)</h3>
-              <p>{chainPrompt.sourceAction}</p>
+      {chainPrompt.active && chainPrompt.player === 'player' && (
+        <div className="target-selection-overlay" style={{ zIndex: 60 }}>
+          <div className="target-selection-content chain-modal-content">
+            <div className="target-selection-pulse"></div>
+            <div className="chain-modal-header">
+              <h3>⚡ CHUỖI KÍCH HOẠT (CHAIN)</h3>
+              <p className="chain-source-desc">{chainPrompt.sourceAction}</p>
             </div>
-            <div className="chain-body">
-              <p>Bạn có muốn kích hoạt lá bài úp để phản hồi không?</p>
-              <div className="chain-hint">💡 Các lá bài nhấp nháy trên sân có thể kích hoạt</div>
+            
+            <div className="activatable-cards-section">
+              <h4>Chọn lá bài để kích hoạt (phản hồi):</h4>
+              <div className="activatable-cards-grid">
+                {getActivatableCards().map((item, i) => (
+                  <div 
+                    key={i} 
+                    className="activatable-card-item"
+                    onClick={() => {
+                      if (item.source === 'field') {
+                        if (isMultiplayer && roomId) socket.emit('chain-response', { roomId, response: 'yes' })
+                        activateSetCard(item.card, item.index, 'player')
+                      } else if (item.source === 'hand') {
+                        if (isMultiplayer && roomId) socket.emit('chain-response', { roomId, response: 'yes' })
+                        handleActivateKuriboh(item.index)
+                      }
+                    }}
+                    onMouseEnter={() => setHoveredCard(item.card)}
+                    onMouseLeave={() => setHoveredCard(null)}
+                  >
+                    <img src={item.card.image_url} alt={item.card.name} />
+                    <div className="card-source-tag">{item.source === 'field' ? 'Sân' : 'Tay'}</div>
+                    <div className="activatable-card-name">{item.card.name}</div>
+                  </div>
+                ))}
+                {getActivatableCards().length === 0 && (
+                  <p className="no-cards-msg">Không có lá bài nào khả dụng để kích hoạt.</p>
+                )}
+              </div>
             </div>
-            <div className="chain-buttons">
+
+            <div className="chain-modal-footer">
               <button 
-                className="chain-btn no" 
+                className="btn-cancel-chain"
                 onClick={() => {
-                  if (isMultiplayer && roomId) {
-                    socket.emit('chain-response', { roomId, response: 'no' })
-                  }
-                  setChainPrompt({ active: false, player: null, sourceAction: '', onResolve: null, onCancel: null, context: null })
-                  chainPrompt.onCancel?.()
+                   if (isMultiplayer && roomId && chainPrompt.player === 'player') {
+                     socket.emit('chain-response', { roomId, response: 'no' })
+                   }
+                   setChainPrompt(prev => ({ ...prev, active: false }))
+                   if (chainPrompt.onCancel) chainPrompt.onCancel()
                 }}
               >
                 KHÔNG KÍCH HOẠT (CANCEL)
               </button>
             </div>
+            
+            <p className="chain-hint">
+              💡 Bạn cũng có thể click trực tiếp vào các lá bài đang nhấp nháy trên sân.
+            </p>
           </div>
         </div>
       )}
