@@ -99,6 +99,8 @@ function Duel() {
   })
   
   const [duelTurnCount, _setDuelTurnCount] = useState(1)
+  const [phaseAnnounced, setPhaseAnnounced] = useState(null)
+  const [activeEffects, setActiveEffects] = useState([]) // For tracking multiple simultaneous VFX
   
   // Refs for AI to avoid stale closures
   const playerFieldRef = useRef(playerField)
@@ -147,7 +149,50 @@ function Duel() {
   })
 
   
-  // Phase 4 States
+  // --- Premium VFX Helpers ---
+  const triggerEffect = (type, duration = 1000) => {
+    const id = Date.now()
+    const effect = { id, type }
+    setActiveEffects(prev => [...prev, effect])
+    
+    // Add shake to field if it's a shake effect
+    if (type.startsWith('screen-shake')) {
+      const field = document.querySelector('.duel-field')
+      if (field) {
+        field.classList.remove('screen-shake-low', 'screen-shake-med', 'screen-shake-high')
+        field.classList.add(type)
+        setTimeout(() => field.classList.remove(type), duration)
+      }
+    }
+
+    setTimeout(() => {
+      setActiveEffects(prev => prev.filter(e => e.id !== id))
+    }, duration)
+  }
+
+  const triggerParticleBurst = (x, y, color = '#fff', count = 15) => {
+    const burstId = `burst-${Date.now()}`
+    const particles = []
+    
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const distance = 50 + Math.random() * 150
+      particles.push({
+        id: `${burstId}-${i}`,
+        tx: Math.cos(angle) * distance,
+        ty: Math.sin(angle) * distance,
+        duration: 0.5 + Math.random() * 1,
+        x, y, color
+      })
+    }
+    
+    setActiveEffects(prev => [...prev, ...particles.map(p => ({ ...p, type: 'particle' }))])
+    setTimeout(() => {
+      setActiveEffects(prev => prev.filter(e => !e.id?.startsWith(burstId)))
+    }, 2000)
+  }
+
+  // --- End Premium VFX Helpers ---
 
   useEffect(() => {
     if (!player || !ai) {
@@ -218,6 +263,14 @@ function Duel() {
       socket.emit('chain-request', { roomId, prompt: chainPrompt })
     }
   }, [chainPrompt.active, isMultiplayer, roomId])
+
+  useEffect(() => {
+    if (currentPhase && currentTurn) {
+      setPhaseAnnounced(`${currentTurn === 'player' ? 'Your' : "Opponent's"} ${currentPhase} Phase`)
+      const timer = setTimeout(() => setPhaseAnnounced(null), 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [currentPhase, currentTurn])
 
   const handleOpponentChainResponse = (response) => {
     setChainPrompt(prev => {
@@ -638,10 +691,14 @@ function Duel() {
 
             setAiField(prev => {
               const newMonsters = [...prev.monsters]
-              newMonsters[emptyZoneIndex] = { ...card, faceUp, position, justSummoned: true }
+              newMonsters[emptyZoneIndex] = { ...card, faceUp, position, justSummoned: true, className: 'card-slam' }
               return { ...prev, monsters: newMonsters }
             })
             setNormalSummonUsed(true)
+            
+            // VFX: Particles and Shake
+            triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 4, '#ff4444', 20)
+            triggerEffect('screen-shake-low', 200)
             console.log(`AI ${faceUp ? 'Normal Summoned' : 'Set'} ${card.name}`)
             break
           } else if (tributesNeeded > 0 && availableMonsters.length >= tributesNeeded) {
@@ -659,9 +716,13 @@ function Duel() {
                 newMonsters[t.index] = null
               }
               const newEmptyZone = newMonsters.findIndex(mz => mz === null)
-              newMonsters[newEmptyZone] = { ...card, faceUp: true, position: 'attack', justSummoned: true }
+              newMonsters[newEmptyZone] = { ...card, faceUp: true, position: 'attack', justSummoned: true, className: 'card-slam' }
               return { ...prev, monsters: newMonsters }
             })
+
+            // VFX: Bigger shake for AI tribute
+            triggerEffect('screen-shake-med', 400)
+            triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 4, '#ff4444', 30)
 
             setAiGraveyard(prev => [...prev, ...tributes])
             
@@ -1428,10 +1489,15 @@ function Duel() {
           faceUp: true,
           position: 'attack',
           originalAtk: card.atk,
-          originalDef: card.def
+          originalDef: card.def,
+          className: 'card-slam'
         }
         // Mark normal summon as used
         setNormalSummonUsed(true)
+        
+        // VFX: Particles
+        triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 2, '#ffd700', 20)
+        triggerEffect('screen-shake-low', 200)
       } else if (summonMode === 'defense') {
         // Defense position, face-up
         newMonsters[zoneIndex] = {
@@ -1439,10 +1505,15 @@ function Duel() {
           faceUp: true,
           position: 'defense',
           originalAtk: card.atk,
-          originalDef: card.def
+          originalDef: card.def,
+          className: 'card-slam'
         }
         // Mark normal summon as used
         setNormalSummonUsed(true)
+        
+        // VFX: Particles
+        triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 2, '#8ab4f8', 15)
+        triggerEffect('screen-shake-low', 200)
       } else if (summonMode === 'set') {
         // Face-down defense
         newMonsters[zoneIndex] = {
@@ -1450,10 +1521,14 @@ function Duel() {
           faceUp: false,
           position: 'defense',
           originalAtk: card.atk,
-          originalDef: card.def
+          originalDef: card.def,
+          className: 'card-slam'
         }
         // Mark normal summon as used (set counts as normal summon)
         setNormalSummonUsed(true)
+        
+        // VFX: Subtle shake for set
+        triggerEffect('screen-shake-low', 100)
       }
       
       setField({ ...field, monsters: newMonsters })
@@ -3762,16 +3837,47 @@ function Duel() {
       const hasFaceDownSpells = defenderField.spells.some(s => s && !s.faceUp)
 
       if (hasFaceDownSpells) {
+        // VFX: Battle Charge
+        const isPlayer = currentTurn === 'player'
+        const setField = isPlayer ? setPlayerField : setAiField
+        const field = isPlayer ? playerField : aiField
+        
+        const newMonsters = [...field.monsters]
+        newMonsters[attacker.index] = { ...newMonsters[attacker.index], className: 'attacker-charge' }
+        setField({ ...field, monsters: newMonsters })
+
         setChainPrompt({
           active: true,
           player: isPlayerAttacking ? 'ai' : 'player',
           sourceAction: `${attacker.card.name} tuyên bố tấn công!`,
           onResolve: () => {
             executeBattleCalculation(attacker, defender)
+            
+            // Remove charge class
+            setTimeout(() => {
+              const freshField = isPlayer ? playerFieldRef.current : aiFieldRef.current
+              if (freshField.monsters[attacker.index]) {
+                const finalMonsters = [...freshField.monsters]
+                finalMonsters[attacker.index] = { ...finalMonsters[attacker.index], className: '' }
+                setField({ ...freshField, monsters: finalMonsters })
+              }
+            }, 500)
+            
             resolve()
           },
           onCancel: () => {
             executeBattleCalculation(attacker, defender)
+            
+            // Remove charge class
+            setTimeout(() => {
+              const freshField = isPlayer ? playerFieldRef.current : aiFieldRef.current
+              if (freshField.monsters[attacker.index]) {
+                const finalMonsters = [...freshField.monsters]
+                finalMonsters[attacker.index] = { ...finalMonsters[attacker.index], className: '' }
+                setField({ ...freshField, monsters: finalMonsters })
+              }
+            }, 500)
+            
             resolve()
           },
           context: { type: 'attack', attacker, defender }
@@ -3779,8 +3885,31 @@ function Duel() {
         return
       }
 
-      executeBattleCalculation(attacker, defender)
-      resolve()
+      // VFX: Battle Charge
+      const isPlayer = currentTurn === 'player'
+      const setField = isPlayer ? setPlayerField : setAiField
+      const field = isPlayer ? playerField : aiField
+      
+      const newMonsters = [...field.monsters]
+      newMonsters[attacker.index] = { ...newMonsters[attacker.index], className: 'attacker-charge' }
+      setField({ ...field, monsters: newMonsters })
+
+      // Small delay for the lunge animation to play before calculation
+      setTimeout(() => {
+        executeBattleCalculation(attacker, defender)
+        
+        // Remove charge class after hit
+        setTimeout(() => {
+          const freshField = isPlayer ? playerFieldRef.current : aiFieldRef.current
+          if (freshField.monsters[attacker.index]) {
+            const finalMonsters = [...freshField.monsters]
+            finalMonsters[attacker.index] = { ...finalMonsters[attacker.index], className: '' }
+            setField({ ...freshField, monsters: finalMonsters })
+          }
+        }, 500)
+        
+        resolve()
+      }, 300)
     })
   }
 
@@ -3818,6 +3947,11 @@ function Duel() {
         if (atkDiff > 0) {
           battleLog = `${attackerCard.name} (${attackerCard.atk}) phá hủy ${defenderCard.name} (${defenderCard.atk})!`
           damage = atkDiff
+          
+          // VFX: Clash and Shake
+          triggerEffect('clash', 500)
+          triggerEffect('screen-shake-med', 400)
+          
           setDefenderField(prev => {
             const next = { ...prev, monsters: [...prev.monsters] }
             next.monsters[defender.index] = null
@@ -3831,6 +3965,11 @@ function Duel() {
         } else if (atkDiff < 0) {
           battleLog = `${defenderCard.name} (${defenderCard.atk}) phá hủy ${attackerCard.name} (${attackerCard.atk})!`
           damage = Math.abs(atkDiff)
+          
+          // VFX: Clash and Shake
+          triggerEffect('clash', 500)
+          triggerEffect('screen-shake-med', 400)
+          
           setAttackerField(prev => {
             const next = { ...prev, monsters: [...prev.monsters] }
             next.monsters[attacker.index] = null
@@ -3989,6 +4128,9 @@ function Duel() {
     // Direct attack
     const damage = attackerCard.atk
     
+    // VFX: Big shake for direct hits
+    triggerEffect('screen-shake-high', 600)
+    
     // Direct attack with hand trap check
     const target = isPlayerAttacking ? 'ai' : 'player'
     if (!checkForHandTraps(target, damage, (finalAmt) => animateLP(target, finalAmt))) {
@@ -4015,6 +4157,11 @@ function Duel() {
   }
 
   const animateLP = (target, damage) => {
+    // VFX: Shake based on damage
+    if (damage >= 2000) triggerEffect('screen-shake-high', 600)
+    else if (damage >= 1000) triggerEffect('screen-shake-med', 400)
+    else if (damage > 0) triggerEffect('screen-shake-low', 200)
+
     // Show damage animation
     if (target === 'player') {
       setDamageAnimation({ ...damageAnimation, player: damage })
@@ -4053,6 +4200,44 @@ function Duel() {
 
   return (
     <div className={`duel-field ${targetSelection.active ? 'target-selection-active' : ''}`}>
+      {/* Premium Phase Announcer */}
+      {phaseAnnounced && (
+        <div className="phase-announcer">
+          <div className="phase-announcer-text">{phaseAnnounced}</div>
+        </div>
+      )}
+
+      {/* VFX Layer */}
+      <div className="vfx-layer" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 9999 }}>
+        {activeEffects.map(effect => {
+          if (effect.type === 'particle') {
+            return (
+              <div 
+                key={effect.id}
+                className="vfx-particle"
+                style={{
+                  left: effect.x,
+                  top: effect.y,
+                  backgroundColor: effect.color,
+                  '--tx': `${effect.tx}px`,
+                  '--ty': `${effect.ty}px`,
+                  '--duration': `${effect.duration}s`
+                }}
+              />
+            )
+          }
+          if (effect.type === 'clash') {
+            return (
+              <div 
+                key={effect.id}
+                className="clash-impact"
+                style={{ left: effect.x, top: effect.y }}
+              />
+            )
+          }
+          return null
+        })}
+      </div>
       {/* Game Over Modal */}
       {gameOver && (
         <div className="game-over-modal">
@@ -4425,7 +4610,7 @@ function Duel() {
                       <img 
                         src={card.image_url} 
                         alt={card.name}
-                        className={`field-card ${card.position}`}
+                        className={`field-card ${card.position} ${card.className || ''}`}
                       />
                       <div className="atk-def-overlay">
                         <div className="atk-value">{card.atk}</div>
@@ -4467,7 +4652,7 @@ function Duel() {
                       <img 
                         src={card.image_url} 
                         alt={card.name}
-                        className={`field-card ${card.position} ${card.justSummoned ? 'just-summoned' : ''}`}
+                        className={`field-card ${card.position} ${card.justSummoned ? 'just-summoned' : ''} ${card.className || ''}`}
                       />
                       <div className="atk-def-overlay">
                         <div className="atk-value">{card.atk}</div>
