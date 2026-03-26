@@ -101,6 +101,12 @@ function Duel() {
   const [duelTurnCount, _setDuelTurnCount] = useState(1)
   const [phaseAnnounced, setPhaseAnnounced] = useState(null)
   const [activeEffects, setActiveEffects] = useState([]) // For tracking multiple simultaneous VFX
+  const [gameLog, setGameLog] = useState([{ 
+    id: Date.now(), 
+    message: '--- DUEL STARTED ---', 
+    type: 'system',
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  }])
   
   // Refs for AI to avoid stale closures
   const playerFieldRef = useRef(playerField)
@@ -150,6 +156,18 @@ function Duel() {
 
   
   // --- Premium VFX Helpers ---
+  const addToLog = (message, type = 'info') => {
+    setGameLog(prev => [
+      ...prev,
+      {
+        id: Date.now() + Math.random(),
+        message,
+        type,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ].slice(-50)) // Keep last 50 entries
+  }
+
   const triggerEffect = (type, duration = 1000) => {
     const id = Date.now()
     const effect = { id, type }
@@ -266,7 +284,9 @@ function Duel() {
 
   useEffect(() => {
     if (currentPhase && currentTurn) {
-      setPhaseAnnounced(`${currentTurn === 'player' ? 'Your' : "Opponent's"} ${currentPhase} Phase`)
+      const phaseName = `${currentTurn === 'player' ? 'Your' : "Opponent's"} ${currentPhase} Phase`
+      setPhaseAnnounced(phaseName)
+      addToLog(phaseName, 'phase')
       const timer = setTimeout(() => setPhaseAnnounced(null), 2000)
       return () => clearTimeout(timer)
     }
@@ -696,7 +716,8 @@ function Duel() {
             })
             setNormalSummonUsed(true)
             
-            // VFX: Particles and Shake
+            // VFX and Log
+            addToLog(`AI ${faceUp ? 'Summoned' : 'Set'} ${card.name} in ${position} position`, 'summon')
             triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 4, '#ff4444', 20)
             triggerEffect('screen-shake-low', 200)
             console.log(`AI ${faceUp ? 'Normal Summoned' : 'Set'} ${card.name}`)
@@ -1495,7 +1516,8 @@ function Duel() {
         // Mark normal summon as used
         setNormalSummonUsed(true)
         
-        // VFX: Particles
+        // VFX and Log
+        addToLog(`Summoned ${card.name} in Attack Position`, 'summon')
         triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 2, '#ffd700', 20)
         triggerEffect('screen-shake-low', 200)
       } else if (summonMode === 'defense') {
@@ -1511,7 +1533,8 @@ function Duel() {
         // Mark normal summon as used
         setNormalSummonUsed(true)
         
-        // VFX: Particles
+        // VFX and Log
+        addToLog(`Summoned ${card.name} in Defense Position`, 'summon')
         triggerParticleBurst(window.innerWidth / 2, window.innerHeight / 2, '#8ab4f8', 15)
         triggerEffect('screen-shake-low', 200)
       } else if (summonMode === 'set') {
@@ -1806,6 +1829,7 @@ function Duel() {
       setPlayingField({ ...playingField, spells: newSpells })
 
       // Show activation
+      addToLog(`${owner === 'player' ? 'Player' : 'AI'} activated ${card.name}!`, 'spell')
       setActivatingSpell(card)
       
       setTimeout(() => {
@@ -4157,6 +4181,11 @@ function Duel() {
   }
 
   const animateLP = (target, damage) => {
+    // Log LP change
+    if (damage > 0) {
+      addToLog(`${target === 'player' ? 'Player' : 'AI'} LP decreased by ${damage}`, 'system')
+    }
+
     // VFX: Shake based on damage
     if (damage >= 2000) triggerEffect('screen-shake-high', 600)
     else if (damage >= 1000) triggerEffect('screen-shake-med', 400)
@@ -4527,6 +4556,19 @@ function Duel() {
 
       {/* Main Field Container */}
       <div className="main-field-container">
+        {/* Game Log */}
+        <div className="game-log-container" ref={logRef}>
+          <div className="game-log-header">BATTLE LOG</div>
+          <div className="game-log-content">
+            {gameLog.map((log) => (
+              <div key={log.id} className={`log-entry ${log.type}`}>
+                <span className="log-time">[{log.timestamp}]</span>
+                <span className="log-msg">{log.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Left Side - AI Deck/Extra/GY */}
         <div className="side-zones left-side">
           <div className="zone extra-deck-zone">

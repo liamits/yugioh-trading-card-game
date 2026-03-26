@@ -3348,4 +3348,84 @@
   transform: scale(1.1) translateY(-10px) !important;
 }
 
+/* Battle Log Styles */
+.game-log-container {
+  position: absolute;
+  left: 20px;
+  top: 100px;
+  width: 240px;
+  height: calc(100vh - 400px);
+  background: rgba(10, 14, 39, 0.4);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(138, 180, 248, 0.2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 80;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+}
+
+.game-log-header {
+  padding: 8px 12px;
+  background: rgba(138, 180, 248, 0.1);
+  border-bottom: 1px solid rgba(138, 180, 248, 0.2);
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: #8ab4f8;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.game-log-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138, 180, 248, 0.3) transparent;
+}
+
+.game-log-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.game-log-content::-webkit-scrollbar-thumb {
+  background: rgba(138, 180, 248, 0.3);
+  border-radius: 2px;
+}
+
+.log-entry {
+  font-size: 0.8rem;
+  line-height: 1.4;
+  display: flex;
+  gap: 6px;
+  animation: logSlideIn 0.3s ease-out;
+}
+
+@keyframes logSlideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.log-time {
+  opacity: 0.4;
+  font-family: monospace;
+  white-space: nowrap;
+}
+
+.log-msg {
+  color: #e0e0e0;
+}
+
+/* Log Entry Types */
+.log-entry.summon .log-msg { color: #ffd700; font-weight: 600; }
+.log-entry.battle .log-msg { color: #ff77c6; font-weight: 600; }
+.log-entry.damage .log-msg { color: #ff4444; }
+.log-entry.phase .log-msg { color: #8ab4f8; font-style: italic; opacity: 0.8; }
+.log-entry.system .log-msg { color: #aaaaaa; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 4px; }
+
 
